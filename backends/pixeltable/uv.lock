@@ -3955,7 +3955,7 @@ requires-dist = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "ollama" },
-    { name = "pixeltable", extras = ["serve"], specifier = ">=0.7.8" },
+    { name = "pixeltable", extras = ["serve"], specifier = ">=0.7.8,<0.8" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "sentence-transformers", specifier = ">=5.4,<6" },

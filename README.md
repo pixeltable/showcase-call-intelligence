@@ -1,4 +1,7 @@
-# Call Intelligence
+# Pixeltable showcase: call intelligence
+
+[![CI](https://github.com/pixeltable/showcase-call-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/pixeltable/showcase-call-intelligence/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Two backends, one product. **Pixeltable** is a `TableModel` in [`backends/pixeltable/schema.py`](backends/pixeltable/schema.py). **Reference** is Celery + Redis + Postgres + pgvector. Same React UI, same fixtures, same API surface. Upload a recording; both stacks transcribe, diarize, enrich, and index it for hybrid search.
 
@@ -13,7 +16,7 @@ flowchart LR
 
 Pixeltable: insert a row. Computed columns extract audio, run WhisperX, split speakers, call Ollama five times, and embed segments. Reference: a Celery `process_call` task plus migrations, embed repair, and Redis. Measured contrast: [compare/WHY_PIXELTABLE.md](compare/WHY_PIXELTABLE.md).
 
-This repo is [pixeltable/sample-app-call-intelligence](https://github.com/pixeltable/sample-app-call-intelligence). Licensed under [Apache-2.0](LICENSE).
+This repo is [pixeltable/showcase-call-intelligence](https://github.com/pixeltable/showcase-call-intelligence). Licensed under [Apache-2.0](LICENSE).
 
 ## Clone → sync → seed
 
@@ -22,8 +25,8 @@ This repo is [pixeltable/sample-app-call-intelligence](https://github.com/pixelt
 Manifest videos are gitignored. Seeding runs `fetch_fixtures.py` and `prepare_fixture_media.py` first.
 
 ```bash
-git clone https://github.com/pixeltable/sample-app-call-intelligence.git
-cd sample-app-call-intelligence
+git clone https://github.com/pixeltable/showcase-call-intelligence.git
+cd showcase-call-intelligence
 cp .env.example .env
 cp .env.example backends/reference/.env
 cp .env.example backends/pixeltable/.env

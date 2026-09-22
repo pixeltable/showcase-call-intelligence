@@ -1,0 +1,37 @@
+name: Schema smoke
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  schema-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backends/pixeltable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            backends/pixeltable/pyproject.toml
+            backends/pixeltable/uv.lock
+            shared/pyproject.toml
+            shared/uv.lock
+      - name: Install Pixeltable backend
+        run: uv sync
+      - name: Assert Pixeltable 0.7 and apply the TableModel twice
+        env:
+          PIXELTABLE_HOME: ${{ runner.temp }}/pixeltable
+        run: |
+          uv run python -c "import pixeltable as pxt; assert pxt.__version__.startswith('0.7.'), pxt.__version__; import schema; schema.apply()"

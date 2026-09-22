@@ -7,7 +7,7 @@ For how to run and use the app, see [README.md](README.md).
 ## Repository layout
 
 ```
-sample-app-call-intelligence/
+showcase-call-intelligence/
 ├── frontend/                 # shared React UI
 ├── backends/
 │   ├── reference/            # Celery + Postgres + pgvector (:8001)

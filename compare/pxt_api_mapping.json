@@ -1,0 +1,15 @@
+{
+  "list_wrapper": "rows",
+  "field_map": {
+    "uuid": "id",
+    "pipeline_status": "status"
+  },
+  "detail_error_fields": [
+    "diarized_err",
+    "summary_err",
+    "sentiment_err",
+    "action_items_err",
+    "category_err",
+    "qa_err"
+  ]
+}

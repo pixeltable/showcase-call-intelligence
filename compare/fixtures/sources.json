@@ -1,0 +1,26 @@
+[
+  {
+    "filename": "pursuit-happiness-video.mp4",
+    "url": "https://raw.githubusercontent.com/pixeltable/pixeltable/main/docs/resources/The-Pursuit-of-Happiness-Video-Extract.mp4",
+    "sha256": "4a3e94396d5f44933501cc686fcbcfce9bc81ca6e96aee5dd791f13399413a0a",
+    "size_bytes": 773057,
+    "attribution": "Pixeltable project (docs/resources)",
+    "license_note": "Bundled in https://github.com/pixeltable/pixeltable/tree/main/docs/resources for documentation demos."
+  },
+  {
+    "filename": "lex-fridman-excerpt.mp4",
+    "url": "https://raw.githubusercontent.com/pixeltable/pixeltable/main/docs/resources/audio-transcription-demo/Lex-Fridman-Podcast-430-Excerpt-0.mp4",
+    "sha256": "52fd2e3cddae91dfb485d57cc8450dc8da7767b994124b9c673f151fb016d94d",
+    "size_bytes": 6465748,
+    "attribution": "Pixeltable project (audio-transcription-demo)",
+    "license_note": "Podcast excerpt used in Pixeltable transcription demos."
+  },
+  {
+    "filename": "travel-briefing.mp4",
+    "url": "https://raw.githubusercontent.com/pixeltable/pixeltable/main/docs/resources/audio-transcription-demo/Lex-Fridman-Podcast-430-Excerpt-1.mp4",
+    "sha256": "cf4f08ef54e275ad543f76bd595246dde42feaddc131ccdbfb25126948d973c9",
+    "size_bytes": 7701135,
+    "attribution": "Pixeltable project (audio-transcription-demo)",
+    "license_note": "Podcast excerpt used in Pixeltable transcription demos."
+  }
+]

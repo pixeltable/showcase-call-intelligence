@@ -1,0 +1,21 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+*.egg-info/
+
+# Local comparison data (catalog, uploads, retired samples)
+data/
+backends/reference/uploads/
+.cursor/
+.compare-pids/
+.compare-state.json
+compare/reports/*.json
+
+# Downloaded compare video fixtures (scripts/fetch_fixtures.py).
+# podcast-excerpt-audio.wav is a derived excerpt and is committed.
+compare/fixtures/*.mp4
+compare/fixtures/billing-call.mp4
+compare/fixtures/bangkok-scene.mp4

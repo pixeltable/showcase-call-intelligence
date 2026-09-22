@@ -1,0 +1,21 @@
+[project]
+name = "sample-app-call-intelligence-pixeltable"
+version = "0.4.0"
+description = "Call intelligence Pixeltable backend (TableModel + computed columns)"
+requires-python = ">=3.11"
+dependencies = [
+    "pixeltable[serve]>=0.7.8",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "python-multipart",
+    "ollama",
+    "sentence-transformers>=5.4,<6",
+    "torch",
+    "whisperx",
+    "httpx",
+    "call-center-api",
+]
+
+[tool.uv.sources]
+call-center-api = { path = "../../shared", editable = true }

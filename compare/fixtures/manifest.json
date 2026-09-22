@@ -1,0 +1,92 @@
+[
+  {
+    "file": "billing-inquiry-speech.wav",
+    "call_date": "2026-07-01T12:00:00Z",
+    "agent_id": "agent-101",
+    "customer_id": "cust-4821",
+    "queue": "billing",
+    "vertical": "call_center",
+    "media_type": "audio"
+  },
+  {
+    "file": "cancellation-request.wav",
+    "call_date": "2026-07-01T14:00:00Z",
+    "agent_id": "agent-202",
+    "customer_id": "cust-7731",
+    "queue": "retention",
+    "vertical": "call_center",
+    "media_type": "audio"
+  },
+  {
+    "file": "pursuit-happiness-video.mp4",
+    "call_date": "2026-07-01T16:00:00Z",
+    "agent_id": "agent-404",
+    "customer_id": "cust-5520",
+    "queue": "support",
+    "vertical": "call_center",
+    "media_type": "video"
+  },
+  {
+    "file": "sales-discovery.wav",
+    "call_date": "2026-07-02T10:00:00Z",
+    "agent_id": "rep-301",
+    "customer_id": "prospect-901",
+    "queue": "discovery",
+    "vertical": "sales",
+    "media_type": "audio"
+  },
+  {
+    "file": "sales-demo-video.mp4",
+    "call_date": "2026-07-02T11:00:00Z",
+    "agent_id": "rep-302",
+    "customer_id": "prospect-902",
+    "queue": "demo",
+    "vertical": "sales",
+    "media_type": "video"
+  },
+  {
+    "file": "podcast-excerpt-audio.wav",
+    "call_date": "2026-07-02T14:00:00Z",
+    "agent_id": "host-lex",
+    "customer_id": "guest-ai",
+    "queue": "tech-series",
+    "vertical": "podcast",
+    "media_type": "audio"
+  },
+  {
+    "file": "lex-fridman-excerpt.mp4",
+    "call_date": "2026-07-02T15:00:00Z",
+    "agent_id": "host-lex",
+    "customer_id": "guest-ai",
+    "queue": "tech-series",
+    "vertical": "podcast",
+    "media_type": "video"
+  },
+  {
+    "file": "travel-briefing.mp4",
+    "call_date": "2026-07-02T16:00:00Z",
+    "agent_id": "host-travel",
+    "customer_id": "guest-policy",
+    "queue": "world-affairs",
+    "vertical": "podcast",
+    "media_type": "video"
+  },
+  {
+    "file": "interview-behavioral.wav",
+    "call_date": "2026-07-02T18:00:00Z",
+    "agent_id": "interviewer-01",
+    "customer_id": "candidate-441",
+    "queue": "senior-engineer",
+    "vertical": "interview",
+    "media_type": "audio"
+  },
+  {
+    "file": "interview-session.mp4",
+    "call_date": "2026-07-02T19:00:00Z",
+    "agent_id": "interviewer-02",
+    "customer_id": "candidate-442",
+    "queue": "staff-engineer",
+    "vertical": "interview",
+    "media_type": "video"
+  }
+]

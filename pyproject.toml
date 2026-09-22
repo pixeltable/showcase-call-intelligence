@@ -1,0 +1,8 @@
+[project]
+name = "sample-app-call-intelligence"
+version = "0.4.0"
+description = "Side-by-side call intelligence — Pixeltable TableModel vs Celery/Postgres"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx",
+]

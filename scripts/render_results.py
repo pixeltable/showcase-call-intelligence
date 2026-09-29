@@ -85,8 +85,9 @@ def fmt(v: float, unit: str) -> str:
     return f"{v:,.0f}"
 
 
-def grouped_bars(title: str, subtitle: str, rows: list[tuple[str, dict[str, float]]], unit: str, top: float) -> tuple[list[str], float]:
-    """One group per row, one bar per backend, a shared linear axis from zero."""
+def grouped_bars(title: str, subtitle: str, rows: list[tuple[str, dict[str, float | None]]], unit: str, top: float,
+                 missing: str = "n/a") -> tuple[list[str], float]:
+    """One group per row, one bar per backend, a shared linear axis from zero. `missing` labels a value of None."""
     left, right = 230.0, W - 70.0
     bar_h, gap, group_gap = 11.0, 2.0, 12.0
     group_h = 2 * bar_h + gap + group_gap
@@ -111,7 +112,7 @@ def grouped_bars(title: str, subtitle: str, rows: list[tuple[str, dict[str, floa
         for j, b in enumerate(BACKENDS):
             by = gy + j * (bar_h + gap)
             if vals.get(b) is None:
-                parts.append(text(left + 5, by + bar_h - 2, f"n/a ({SHORT[b]})", size=10, cls="muted"))
+                parts.append(text(left + 5, by + bar_h - 2, f"{missing} ({SHORT[b]})", size=10, cls="muted"))
                 continue
             parts.append(bar(left, by, x(vals[b]) - left, bar_h, b, f"{label}, {SHORT[b]}: {fmt(vals[b], unit)}"))
             parts.append(text(x(vals[b]) + 5, by + bar_h - 2, fmt(vals[b], unit), size=10, cls="ink2"))
@@ -133,11 +134,21 @@ def median(values: list[float]) -> float:
     return round(statistics.median(values), 2)
 
 
-def pipeline_medians(bench: dict) -> dict[str, dict[str, float]]:
-    out = {}
+def pipeline_medians(bench: dict) -> dict[str, dict[str, float | None]]:
+    """Median seconds of the completed runs; None when no run of that backend completed."""
+    out: dict[str, dict[str, float | None]] = {}
     for fixture, per_backend in bench["pipeline"].items():
-        out[fixture] = {b: median([r["complete_sec"] for r in per_backend[b] if r["status"] == "completed"]) for b in BACKENDS}
+        done = {b: [r["complete_sec"] for r in per_backend[b] if r["status"] == "completed"] for b in BACKENDS}
+        out[fixture] = {b: median(done[b]) if done[b] else None for b in BACKENDS}
     return out
+
+
+def pipeline_failures(bench: dict) -> dict[str, dict[str, int]]:
+    return {f: {b: sum(r["status"] != "completed" for r in runs[b]) for b in BACKENDS} for f, runs in bench["pipeline"].items()}
+
+
+def by_reference_median(item: tuple[str, dict]) -> float:
+    return item[1]["reference"] if item[1]["reference"] is not None else float("inf")
 
 
 def concern_totals(m: dict) -> dict[str, dict[str, int]]:
@@ -181,13 +192,14 @@ def evolve_chart(evolve: dict, top: float) -> tuple[list[str], float]:
 
 def pipeline_chart(bench: dict, top: float) -> tuple[list[str], float]:
     med = pipeline_medians(bench)
-    rows = sorted(med.items(), key=lambda kv: kv[1]["reference"])
+    rows = sorted(med.items(), key=by_reference_median)
     return grouped_bars(
         "Upload to completed, per fixture",
         f"Median of {bench['pipeline_rounds']} runs, one call in flight, Ollama reloaded before each. LLM: {bench['environment']['ollama']['model']}.",
         [(Path(k).stem, v) for k, v in rows],
         "s",
         top,
+        missing="failed",
     )
 
 
@@ -247,29 +259,7 @@ def tables(metrics: dict, bench: dict | None, evolve: dict | None) -> dict[str, 
     out["concerns"] = concerns_table(m)
     out["pipeline_code"] = "```python\n" + pipeline_excerpt() + "\n```"
     if bench and "pipeline" in bench:
-        med = pipeline_medians(bench)
-        body = [
-            [Path(k).stem, f"{v['reference']:.1f}", f"{v['pixeltable']:.1f}", ratio(v["reference"], v["pixeltable"])]
-            for k, v in sorted(med.items(), key=lambda kv: kv[1]["reference"])
-        ]
-        tot = {b: sum(v[b] for v in med.values()) for b in BACKENDS}
-        body.append(["**All 10**", f"**{tot['reference']:.0f}**", f"**{tot['pixeltable']:.0f}**", f"**{ratio(tot['reference'], tot['pixeltable'])}**"])
-        cold = bench.get("first_call", {})
-        out["pipeline"] = table(["Fixture (median seconds)", "Reference", "Pixeltable", "Ref / Pxt"], body)
-        failed = {b: sum(r["status"] != "completed" for f in bench["pipeline"].values() for r in f[b]) for b in BACKENDS}
-        runs = sum(len(f["reference"]) for f in bench["pipeline"].values())
-        out["pipeline"] += (
-            f"\n\n{runs} timed runs per backend; runs that did not complete: Reference {failed['reference']},"
-            f" Pixeltable {failed['pixeltable']} (medians use completed runs; errors are in `benchmarks.json`)."
-        )
-        if cold:
-            out["pipeline"] += (
-                f"\n\nFirst call after start (model loading included): Reference {cold['reference']['complete_sec']:.1f}s,"
-                f" Pixeltable {cold['pixeltable']['complete_sec']:.1f}s. Upload accepted in"
-                f" {median([r['accept_sec'] for f in bench['pipeline'].values() for r in f['reference']]) * 1000:.0f}ms"
-                f" and {median([r['accept_sec'] for f in bench['pipeline'].values() for r in f['pixeltable']]) * 1000:.0f}ms (median)."
-            )
-    if bench and "pipeline" in bench:
+        out["pipeline"] = pipeline_table(bench)
         out["stages"] = stage_table(bench)
     if bench and "reads" in bench:
         out["reads"] = table(
@@ -298,6 +288,44 @@ def measured_when(bench: dict) -> str:
     if pipeline and reads and pipeline != reads:
         return f"Pipeline measured {pipeline}, reads {reads},"
     return f"Measured {pipeline or reads or bench['environment']['measured_at']}"
+
+
+def pipeline_table(bench: dict) -> str:
+    """Median seconds per fixture. A cell names its failed runs; a fixture a backend never completed says so and
+    leaves the totals, which sum only the fixtures both backends completed."""
+    med, fails = pipeline_medians(bench), pipeline_failures(bench)
+
+    def cell(fixture: str, b: str) -> str:
+        v, n = med[fixture][b], fails[fixture][b]
+        if v is None:
+            return "failed"
+        return f"{v:.1f}" + (f" ({n} failed)" if n else "")
+
+    body = [
+        [Path(k).stem, cell(k, "reference"), cell(k, "pixeltable"),
+         ratio(v["reference"], v["pixeltable"]) if None not in v.values() else "-"]
+        for k, v in sorted(med.items(), key=by_reference_median)
+    ]  # fmt: skip
+    both = [v for v in med.values() if None not in v.values()]
+    tot = {b: sum(v[b] for v in both) for b in BACKENDS}
+    label = f"All {len(med)}" if len(both) == len(med) else f"{len(both)} of {len(med)} completed on both"
+    body.append([f"**{label}**", f"**{tot['reference']:.0f}**", f"**{tot['pixeltable']:.0f}**", f"**{ratio(tot['reference'], tot['pixeltable'])}**"])
+    out = table(["Fixture (median seconds)", "Reference", "Pixeltable", "Ref / Pxt"], body)
+    failed = {b: sum(f[b] for f in fails.values()) for b in BACKENDS}
+    runs = sum(len(f["reference"]) for f in bench["pipeline"].values())
+    out += (
+        f"\n\n{runs} timed runs per backend; runs that did not complete: Reference {failed['reference']},"
+        f" Pixeltable {failed['pixeltable']} (medians use completed runs; errors are in `benchmarks.json`)."
+    )
+    cold = bench.get("first_call", {})
+    if cold:
+        accept = {b: median([r["accept_sec"] for f in bench["pipeline"].values() for r in f[b]]) for b in BACKENDS}
+        out += (
+            f"\n\nFirst call after start (model loading included): Reference {cold['reference']['complete_sec']:.1f}s,"
+            f" Pixeltable {cold['pixeltable']['complete_sec']:.1f}s. Upload accepted in"
+            f" {accept['reference'] * 1000:.0f}ms and {accept['pixeltable'] * 1000:.0f}ms (median)."
+        )
+    return out
 
 
 STAGE_OF = {"queued": "Queued", "transcribing": "Transcribe and diarize (WhisperX)", "diarizing": "Transcribe and diarize (WhisperX)",

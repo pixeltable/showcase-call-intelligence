@@ -7,7 +7,7 @@ The Reference is what an AI coding assistant produces when asked for this produc
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,165 | 411 |
+| App code you maintain (lines) | 1,164 | 413 |
 | Files | 24 | 3 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |
@@ -31,10 +31,10 @@ Where the lines go (files grouped by concern by hand; the counts are measured):
 | &nbsp;&nbsp;of which schema and migrations | 211 |  |
 | &nbsp;&nbsp;of which model and media wrappers | 170 |  |
 | &nbsp;&nbsp;of which orchestration and status | 97 |  |
-| Queries and HTTP | 468 | 243 |
+| Queries and HTTP | 467 | 244 |
 | Repair tooling | 187 | n/a |
-| Settings (config.py) | 32 | 10 |
-| **Total** | **1,165** | **411** |
+| Settings (config.py) | 32 | 11 |
+| **Total** | **1,164** | **413** |
 <!-- /results:concerns -->
 
 The HTTP layer is where the two are closest: both hand-write handlers for the same REST contract, and Pixeltable's are shorter because its queries name columns the way the contract does and the list routes are declared. The difference is the rest: the Reference writes the pipeline's orchestration, its state machine, its schema history, its model wrappers and the tools to repair what the pipeline can leave half-done. On Pixeltable those are the table definitions.
@@ -102,6 +102,7 @@ Two changes and one failure a team meets in the first month, run against both ba
 - **Throughput under load.** Pixeltable's insert holds the `calls` table lock for the whole computation, so inserts into one table run one at a time. Celery runs as many calls at once as it has workers. This comparison runs one at a time on both sides, which hides the difference.
 - **Writes during processing.** On Pixeltable a delete or a schema change waits for the insert in progress. The Reference is not blocked.
 - **Backfill failure.** The Reference's backfill task commits call by call. `pxt schema update` backfills in one transaction, so one failing LLM call rolls back the whole column.
+- **Accepted work survives a restart.** The Reference writes a `queued` row and a Celery message before it answers `202`. A Pixeltable insert is synchronous, so the app holds an accepted upload in memory until its row commits: restarting the service in between loses the call (its id returns 404) and leaves the upload on disk. Closing that gap means a durable intake table and a resume step, which is the queue this comparison measures the Reference for; Pixeltable's own background insert routes keep their jobs in memory too.
 - **Read latency.** Building a Pixeltable query resolves the table once per selected expression, a cost SQLAlchemy queries do not pay. The declared routes match the Reference, and the handlers that reuse a select list come close; semantic search, whose select list depends on the request, stays slower ([METHODOLOGY.md](METHODOLOGY.md#pixeltable-issues-this-comparison-hit)).
 - **Familiarity.** Every piece of the Reference is a tool most backend engineers already know.
 - **Undo, for now.** `pxt revert` exists, but in 0.7.11 reverting an operation that did not touch the segment view (such as a recompute) also removes the view's last rows ([METHODOLOGY.md](METHODOLOGY.md#pixeltable-issues-this-comparison-hit)), so this comparison does not rely on it.

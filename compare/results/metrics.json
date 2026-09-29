@@ -2,11 +2,11 @@
   "backends": {
     "pixeltable": {
       "app_files": 3,
-      "app_loc": 411,
+      "app_loc": 413,
       "by_concern": {
-        "Queries and HTTP": 243,
+        "Queries and HTTP": 244,
         "Schema and pipeline": 158,
-        "Settings (config.py)": 10
+        "Settings (config.py)": 11
       },
       "classified": {
         "intermediate_progress_visible": false,
@@ -20,8 +20,8 @@
       },
       "config_loc": 20,
       "file_breakdown": {
-        "backends/pixeltable/app.py": 318,
-        "backends/pixeltable/config.py": 10,
+        "backends/pixeltable/app.py": 319,
+        "backends/pixeltable/config.py": 11,
         "backends/pixeltable/functions.py": 83
       },
       "migrations": null,
@@ -36,9 +36,9 @@
     },
     "reference": {
       "app_files": 24,
-      "app_loc": 1165,
+      "app_loc": 1164,
       "by_concern": {
-        "Queries and HTTP": 468,
+        "Queries and HTTP": 467,
         "Repair tooling": 187,
         "Schema and pipeline / model and media wrappers": 170,
         "Schema and pipeline / orchestration and status": 97,
@@ -69,7 +69,7 @@
         "backends/reference/app/main.py": 26,
         "backends/reference/app/models.py": 64,
         "backends/reference/app/routers/admin.py": 34,
-        "backends/reference/app/routers/calls.py": 192,
+        "backends/reference/app/routers/calls.py": 191,
         "backends/reference/app/routers/comments.py": 38,
         "backends/reference/app/routers/search.py": 90,
         "backends/reference/app/services/diarization.py": 3,

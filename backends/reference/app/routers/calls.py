@@ -107,12 +107,11 @@ def list_calls(
         q = q.filter(Call.queue == queue)
     if min_handle_time is not None:
         q = q.filter(Call.handle_time_sec >= min_handle_time)
+    if sentiment_label:
+        q = q.filter(Call.sentiment["label"].astext == sentiment_label)
 
     calls = q.order_by(Call.call_date.desc()).limit(max(1, min(limit, 200))).all()
-    results = [_to_summary(c) for c in calls]
-    if sentiment_label:
-        results = [c for c in results if c.sentiment_label == sentiment_label]
-    return results
+    return [_to_summary(c) for c in calls]
 
 
 @router.get("/kpis", response_model=KpiResponse)

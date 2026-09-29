@@ -16,3 +16,5 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "all-mpnet-base-v2")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 UPLOAD_DIR = Path(os.getenv("PXT_UPLOAD_DIR", str(_REPO / "data" / "pixeltable" / "uploads"))).resolve()
+# Media the API may serve: uploads, and the files Pixeltable computes (always $PIXELTABLE_HOME/media).
+MEDIA_ROOTS = (UPLOAD_DIR, (Path(os.getenv("PIXELTABLE_HOME", "~/.pixeltable")).expanduser() / "media").resolve())

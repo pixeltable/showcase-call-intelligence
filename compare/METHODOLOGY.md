@@ -56,18 +56,21 @@ Defects found by reading and running both sides, fixed so neither side wins on a
 | Reference | Video uploads ran ffmpeg inside the upload request, so a "202 Accepted" waited on ffmpeg | extraction moved into the Celery task |
 | Reference | Semantic hits had `score: null` | cosine similarity returned |
 | Reference | Upload read the whole file into memory | streamed to disk |
+| Reference | The sentiment filter ran in Python after the SQL limit, so matching calls past the first page were dropped | filtered in SQL before the limit; the parity gate checks each label at `limit=1` |
 | Pixeltable | `create_all()` at import, so `pxt schema update` could not load the file | one `app.py`, `pxt schema update` / `pxt service update` |
 | Pixeltable | A stored `pipeline_status` column claimed stages it could never show | removed; status is `processing` until the row commits |
 | Pixeltable | Private internals (`get_runtime().catalog.begin_xact`, `template_query._collect`) to run queries | plain queries and declared routes |
 | Pixeltable | Five LLM calls ran on silent recordings | a null transcript skips them, as on the Reference |
 | Pixeltable | A different wire shape, adapted by a Pixeltable-only frontend client and a compare-side normalizer | serves the shared contract; both adapters deleted |
 | Pixeltable | Upload files were never deleted | removed with the call |
+| Pixeltable | The media routes served any path stored in a media column | confined to the upload directory and Pixeltable's media store, as the Reference confines its uploads |
 | Pixeltable | Search filtered on a Python UDF, so the vector search could not push its LIMIT to Postgres | SQL-expressible error filter |
 | Pixeltable | Call detail, comments and keyword search built their query on every request, and building a query resolves the table once per selected expression | select lists built once per process and filtered per request, as declared routes do |
 | UI | Pixeltable uploads never appeared, a comment reloaded the waveform, the highlight stopped following playback, a failed video left no player, dates differed by the browser's UTC offset | fixed in the shared components |
 | Harness | The delete gate compared a UUID column to a string, counted 0 before and after, and passed | typed UUIDs; counts checked before and after |
 | Harness | Fixture dates had aged out of the 7-day KPI window, so both KPI banners showed 0 and matched | the seed shifts the dates so the newest call lands an hour before the seed |
 | Harness | Lines were counted raw, the shared package was added to both totals, and the Pixeltable-only adapters were not counted | `metrics.py` |
+| Harness | A fixture whose runs all failed crashed the renderer, and a partly failed fixture showed a plain median | each cell names its failed runs; totals sum only fixtures both backends completed |
 | Harness | "Parallel enrichment" and a stage-by-stage status were claimed for Pixeltable | both removed: `ollama.chat` is a synchronous UDF, so the five calls run one after another, and rows commit whole |
 | Harness | Ollama answered repeated prompts from its cache, so in an earlier run each fixture's first call was its slowest on almost every fixture, and the medians timed cached prompts | Ollama reloads the model before every timed call |
 

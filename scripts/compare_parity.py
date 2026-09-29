@@ -101,7 +101,8 @@ def main() -> int:
     id_key = {"reference": "ref_id", "pixeltable": "pxt_id"}
     seeded = {api.name: {ids[id_key[api.name]] for ids in state.values()} for api in (ref, pxt)}
     for api in (ref, pxt):
-        roster = {row["id"]: row for row in api.list_calls(limit=200)}
+        rows = api.list_calls(limit=200)  # newest first
+        roster = {row["id"]: row for row in rows}
         c.check(f"{api.name} roster lists every seeded call", seeded[api.name] <= set(roster))
         c.check(f"{api.name} roster statuses completed", all(roster[i]["status"] == "completed" for i in seeded[api.name] if i in roster))
         verticals = {roster[i]["vertical"] for i in seeded[api.name] if i in roster}
@@ -110,6 +111,11 @@ def main() -> int:
         c.check(f"{api.name} queue filter", all(r["queue"] == queue for r in api.list_calls(queue=queue)))
         negative = api.list_calls(sentiment_label="negative")
         c.check(f"{api.name} sentiment filter", all(r["sentiment_label"] == "negative" for r in negative))
+        # A filter must apply before the limit: at limit=1 each label still returns its newest call.
+        for label in sorted({r["sentiment_label"] for r in rows if r["sentiment_label"]}):
+            newest = next(r["id"] for r in rows if r["sentiment_label"] == label)
+            got = [r["id"] for r in api.list_calls(sentiment_label=label, limit=1)]
+            c.check(f"{api.name} sentiment filter before limit ({label})", got == [newest], str(got))
         kpis = api.kpis()
         c.check(f"{api.name} KPIs count the seeded calls", kpis["call_count"] >= len(state), json.dumps(kpis))
         c.record(f"{api.name} kpis", kpis)

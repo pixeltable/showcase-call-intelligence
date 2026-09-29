@@ -10,7 +10,7 @@ One call-intelligence product, built twice. **Reference** is the stack an AI cod
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,165 | 411 |
+| App code you maintain (lines) | 1,164 | 413 |
 | Files | 24 | 3 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |
@@ -172,6 +172,7 @@ Both backends make the same WhisperX and LLM calls, so most of the pipeline's ti
 - **Progress.** It commits a status after each stage and lists a call as soon as it is uploaded. A Pixeltable row commits with all its computed columns, so until then the API says `processing` and the roster does not show the call.
 - **Throughput.** Pixeltable's inserts into one table hold its lock for the whole computation and run one at a time. Celery runs as many calls as it has workers. Here both run one at a time.
 - **Backfills.** The Reference's backfill task commits call by call. `pxt schema update` backfills a new column in one transaction, and one failing row rolls back the column.
+- **Accepted work survives a restart.** The Reference writes a `queued` row and a Celery message before it answers `202`. The Pixeltable app holds an accepted upload in memory until its row commits, so a service restart in between loses the call: its id returns 404 and the upload stays on disk.
 - **Reads.** Where Pixeltable's endpoints are hand-written, the Reference answers faster: building a Pixeltable query resolves the table once per selected expression. This app builds each select list once per process; semantic search, whose select list depends on the request, still pays that cost.
 - **Familiarity.** Every part of it is a tool most backend engineers know.
 

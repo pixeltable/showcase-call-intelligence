@@ -325,9 +325,11 @@ def _unstored(call_id: uuid.UUID) -> dict:
 
 def _media_file(call_id: uuid.UUID, column) -> FileResponse:
     rows = Calls.where(Calls.id == call_id).select(path=column.localpath, name=Calls.original_filename).collect()
-    if len(rows) == 0 or rows[0]["path"] is None or not Path(rows[0]["path"]).is_file():
+    path = Path(rows[0]["path"]).resolve() if len(rows) == 1 and rows[0]["path"] else None
+    # whatever path a writer stored, serve only uploads and Pixeltable's own media
+    if path is None or not path.is_file() or not any(path.is_relative_to(root) for root in config.MEDIA_ROOTS):
         raise HTTPException(status_code=404, detail="Media not available")
-    return FileResponse(rows[0]["path"], filename=Path(rows[0]["name"]).name)
+    return FileResponse(path, filename=Path(rows[0]["name"]).name)
 
 
 @api.get("/calls/{call_id}/audio")

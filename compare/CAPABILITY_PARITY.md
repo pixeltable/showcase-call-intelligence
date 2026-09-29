@@ -29,6 +29,7 @@ LLM wording is not compared: it is the model's, not the backend's.
 | Comment on another call's segment | 422 (not a UUID) or 400 | 400 | request validation |
 | A failed step | the call is `failed`; stages already committed stay | the failing cell and the cells computed from it hold the error; the others keep their values | per-cell errors |
 | Deleting a call that is still processing | immediate | waits for the insert, which holds the table lock | inserts lock `calls` and its views |
+| A restart while a call is processing | the `queued` row and its last status stay | the accepted call is gone: its id returns 404 and the upload stays on disk | an accepted upload lives in the service process until its row commits |
 | Admin repair routes (`/api/admin/*`) | behind `ENABLE_ADMIN_ENDPOINTS` | none; `pxt errors` and `pxt recompute` from the CLI | repair is a platform command |
 
 ## Shared by construction

@@ -2,10 +2,10 @@
   "backends": {
     "pixeltable": {
       "app_files": 3,
-      "app_loc": 413,
+      "app_loc": 414,
       "by_concern": {
-        "Queries and HTTP": 244,
-        "Schema and pipeline": 158,
+        "Queries and HTTP": 242,
+        "Schema and pipeline": 161,
         "Settings (config.py)": 11
       },
       "classified": {
@@ -20,9 +20,9 @@
       },
       "config_loc": 20,
       "file_breakdown": {
-        "backends/pixeltable/app.py": 319,
+        "backends/pixeltable/app.py": 317,
         "backends/pixeltable/config.py": 11,
-        "backends/pixeltable/functions.py": 83
+        "backends/pixeltable/functions.py": 86
       },
       "migrations": null,
       "orchestration_hops": 13,
@@ -36,11 +36,11 @@
     },
     "reference": {
       "app_files": 24,
-      "app_loc": 1164,
+      "app_loc": 1166,
       "by_concern": {
         "Queries and HTTP": 467,
         "Repair tooling": 187,
-        "Schema and pipeline / model and media wrappers": 170,
+        "Schema and pipeline / model and media wrappers": 172,
         "Schema and pipeline / orchestration and status": 97,
         "Schema and pipeline / schema and migrations": 211,
         "Settings (config.py)": 32
@@ -77,7 +77,7 @@
         "backends/reference/app/services/health.py": 72,
         "backends/reference/app/services/ollama_client.py": 72,
         "backends/reference/app/services/storage.py": 50,
-        "backends/reference/app/services/video.py": 28,
+        "backends/reference/app/services/video.py": 30,
         "backends/reference/app/services/whisperx_service.py": 46,
         "backends/reference/worker/celery_app.py": 19,
         "backends/reference/worker/tasks/__init__.py": 3,

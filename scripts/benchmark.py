@@ -105,6 +105,10 @@ def time_call(api: Api, entry: dict) -> dict:
     return result
 
 
+# What must match for a section measured earlier to be published beside one measured now.
+SAME_SETUP = ("git_commit", "machine", "python", "packages", "ollama")
+
+
 def percentile(values: list[float], q: float) -> float:
     ordered = sorted(values)
     return ordered[min(len(ordered) - 1, max(0, round(q * (len(ordered) - 1))))]
@@ -151,6 +155,11 @@ def main() -> int:
     entries = [e for e in load_manifest() if not args.fixtures or e["file"] in args.fixtures]
     previous = json.loads(OUT.read_text()) if OUT.is_file() else {}
     report = {"environment": environment(os.getenv("OLLAMA_HOST", "http://localhost:11434"), os.getenv("OLLAMA_MODEL", "llama3.1"))}
+    if (args.skip_pipeline or args.skip_reads) and previous:
+        changed = [k for k in SAME_SETUP if previous["environment"].get(k) != report["environment"].get(k)]
+        if changed:
+            print(f"refusing to publish sections measured in different setups ({', '.join(changed)} changed); run both", file=sys.stderr)
+            return 2
 
     if not args.skip_pipeline:
         smallest = min(load_manifest(), key=lambda e: (FIXTURES / e["file"]).stat().st_size)

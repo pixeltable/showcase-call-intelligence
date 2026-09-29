@@ -10,7 +10,7 @@ One call-intelligence product, built twice. **Reference** is the stack an AI cod
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,164 | 413 |
+| App code you maintain (lines) | 1,166 | 414 |
 | Files | 24 | 3 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |

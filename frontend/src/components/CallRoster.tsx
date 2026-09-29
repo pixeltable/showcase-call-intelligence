@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TERMINAL_STATUSES, api } from "../api/client";
 import { getProfile } from "../lib/verticals";
 
@@ -16,7 +16,7 @@ interface Props {
   onSelect: (id: string) => void;
   sentimentFilter: string;
   queueFilter: string;
-  /** Uploaded ids not yet listed as done. A backend may list a call only once processing finishes. */
+  /** Uploaded ids not yet finished. A backend may list a call only once processing finishes. */
   pendingIds: string[];
   onSettled: (ids: string[]) => void;
 }
@@ -30,17 +30,23 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
         queue: queueFilter || undefined,
         limit: 100,
       }),
-    refetchInterval: (query) => {
-      const rows = query.state.data ?? [];
-      const processing = rows.some((c) => !TERMINAL_STATUSES.has(c.status));
-      return processing || pendingIds.length > 0 ? POLL_MS : false;
-    },
+    refetchInterval: (query) => ((query.state.data ?? []).some((c) => !TERMINAL_STATUSES.has(c.status)) ? POLL_MS : false),
   });
 
+  // Each upload is watched through its own detail route: the filtered, capped roster may never list it.
+  const queryClient = useQueryClient();
+  const pending = useQueries({
+    queries: pendingIds.map((id) => ({ queryKey: ["pending-call", id], queryFn: () => api.getCall(id), refetchInterval: POLL_MS })),
+  });
   useEffect(() => {
-    const done = calls.filter((c) => pendingIds.includes(c.id) && TERMINAL_STATUSES.has(c.status)).map((c) => c.id);
-    if (done.length > 0) onSettled(done);
-  }, [calls, pendingIds, onSettled]);
+    const done = pendingIds.filter((_, i) => {
+      const q = pending[i];
+      return q?.isError || (q?.data !== undefined && TERMINAL_STATUSES.has(q.data.status));
+    });
+    if (done.length === 0) return;
+    onSettled(done);
+    void queryClient.invalidateQueries({ queryKey: ["calls"] });
+  }, [pending, pendingIds, onSettled, queryClient]);
 
   const headerLabels = getProfile(calls[0]?.vertical).labels;
   const waiting = pendingIds.filter((id) => !calls.some((c) => c.id === id)).length;

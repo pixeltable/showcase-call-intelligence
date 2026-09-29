@@ -15,12 +15,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from call_center_api.schemas import CallDetail  # noqa: E402
+from call_center_api.schemas import CallDetail, CallSummary, SearchHit  # noqa: E402
 from lib.client import backends, load_manifest  # noqa: E402
+from lib.contract import conforms  # noqa: E402
 from lib.report import Checks, write_report  # noqa: E402
 
 STATE_FILE = ROOT / ".compare-state.json"
-CONTRACT_DETAIL_KEYS = set(CallDetail.model_fields)
 QA_KEYS = {"empathy", "resolution", "compliance", "overall"}
 
 
@@ -44,7 +44,7 @@ def compare_call(c: Checks, name: str, entry: dict, ref: dict, pxt: dict) -> Non
     both = {"reference": ref, "pixeltable": pxt}
     for label, call in both.items():
         c.check(f"{name} {label} completed", call["status"] == "completed", call.get("error_message") or "")
-        c.check(f"{name} {label} contract keys", CONTRACT_DETAIL_KEYS <= set(call), str(CONTRACT_DETAIL_KEYS - set(call)))
+        c.check(f"{name} {label} detail matches CallDetail", *conforms(CallDetail, call))
         c.check(f"{name} {label} vertical", call["vertical"] == entry["vertical"], call["vertical"])
         c.check(f"{name} {label} media_type", call["media_type"] == entry["media_type"], call["media_type"])
         c.check(f"{name} {label} qa keys", QA_KEYS <= set(call["qa_scorecard"] or {}))
@@ -103,6 +103,7 @@ def main() -> int:
     for api in (ref, pxt):
         rows = api.list_calls(limit=200)  # newest first
         roster = {row["id"]: row for row in rows}
+        c.check(f"{api.name} roster rows match CallSummary", *conforms(list[CallSummary], rows))
         c.check(f"{api.name} roster lists every seeded call", seeded[api.name] <= set(roster))
         c.check(f"{api.name} roster statuses completed", all(roster[i]["status"] == "completed" for i in seeded[api.name] if i in roster))
         verticals = {roster[i]["vertical"] for i in seeded[api.name] if i in roster}
@@ -124,7 +125,9 @@ def main() -> int:
         for query in ("billing", "cancel"):
             hits = api.search(query, mode="keyword")
             c.check(f"{api.name} keyword {query!r} hits", len(hits) > 0 and all(query in h["text"].lower() for h in hits))
+            c.check(f"{api.name} keyword {query!r} hits match SearchHit", *conforms(list[SearchHit], hits))
         semantic = api.search("monthly subscription fees", mode="semantic", limit=5)
+        c.check(f"{api.name} semantic hits match SearchHit", *conforms(list[SearchHit], semantic))
         c.check(f"{api.name} semantic hits scored", len(semantic) > 0 and all(h["score"] is not None for h in semantic))
         c.check(f"{api.name} hybrid adds semantic hits", any(h["match_type"] == "semantic" for h in api.search("refund", limit=20)))
         c.check(f"{api.name} nonsense query", api.search("zzzznotfound999", mode="keyword") == [])

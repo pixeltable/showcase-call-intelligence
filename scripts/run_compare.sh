@@ -50,12 +50,12 @@ stop_all() {
   pxt service stop call_center/api >/dev/null 2>&1 || true
 }
 
-wait_healthy() {  # url, seconds
+wait_healthy() {  # url, seconds. Health answers 200 even when degraded, so wait for "ok" itself.
   for _ in $(seq "$2"); do
-    curl -fs "$1/api/health" >/dev/null 2>&1 && return 0
+    curl -fs "$1/api/health" 2>/dev/null | grep -q '"status":"ok"' && return 0
     sleep 1
   done
-  echo "not healthy after $2s: $1" >&2
+  echo "not healthy after $2s: $1 $(curl -s "$1/api/health" 2>/dev/null)" >&2
   return 1
 }
 

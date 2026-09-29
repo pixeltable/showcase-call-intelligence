@@ -74,13 +74,17 @@ def main() -> int:
     entries = load_manifest()  # fresh dates, identical on both backends
     ref, pxt_api = backends()
     for api in (ref, pxt_api):
-        deadline = time.time() + 120
+        deadline, health = time.time() + 120, None
         while time.time() < deadline:
             try:
-                api.health()
-                break
+                health = api.health()
+                if health["status"] == "ok":
+                    break
             except Exception:
-                time.sleep(1)
+                pass
+            time.sleep(1)
+        else:
+            raise SystemExit(f"{api.name} is not healthy, refusing to seed: {health}")
 
     # One call at a time, Ollama reloaded before each: two in-flight requests, or a prompt cache
     # left to grow over many calls, push a memory-bound Ollama (Docker Desktop's default VM) into

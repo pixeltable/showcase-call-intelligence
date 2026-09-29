@@ -15,7 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from call_center_api.schemas import CallDetail, CommentOut  # noqa: E402
 from lib.client import FIXTURES, Api, backends, load_manifest  # noqa: E402
+from lib.contract import conforms  # noqa: E402
 from lib.report import Checks, write_report  # noqa: E402
 
 FIXTURE = "billing-inquiry-speech.wav"
@@ -69,12 +71,14 @@ def upload_files(call_id: str) -> list[str]:
 
 def exercise(c: Checks, api: Api, entry: dict) -> dict:
     call_id = api.upload(FIXTURES / FIXTURE, entry, agent_suffix="mutation-test")
+    c.check(f"{api.name} detail while processing matches CallDetail", *conforms(CallDetail, api.detail(call_id)))
     call = api.wait(call_id).call
     c.check(f"{api.name} upload completed", call["status"] == "completed", call.get("error_message") or "")
     seg = call["segments"][0]
     anchored = api.comment(call_id, segment_id=seg["id"], start_sec=seg["start_sec"], author="qa-reviewer", text="segment note")
     loose = api.comment(call_id, segment_id=None, start_sec=0.0, author="qa-reviewer", text="call note")
     c.check(f"{api.name} anchored comment keeps its segment", anchored["segment_id"] == seg["id"])
+    c.check(f"{api.name} comment matches CommentOut", *conforms(CommentOut, anchored))
     c.check(f"{api.name} call-level comment has no segment", loose["segment_id"] is None)
     for bad_segment in (f"{call_id}:999", str(uuid.uuid4())):
         try:
@@ -91,6 +95,7 @@ def exercise(c: Checks, api: Api, entry: dict) -> dict:
     detail = api.detail(call_id)
     c.check(f"{api.name} detail lists 2 comments", len(detail["comments"]) == 2)
     c.check(f"{api.name} comments route lists 2", len(api.comments(call_id)) == 2)
+    c.check(f"{api.name} comments match CommentOut", *conforms(list[CommentOut], api.comments(call_id)))
     c.check(f"{api.name} search finds the call", any(h["call_id"] == call_id for h in api.search("billing")))
 
     before = store_counts(api.name, call_id)

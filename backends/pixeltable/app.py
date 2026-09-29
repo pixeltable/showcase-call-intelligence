@@ -30,11 +30,11 @@ from pixeltable.functions.uuid import uuid7
 from pixeltable.functions.video import extract_audio
 from pixeltable.functions.whisperx import transcribe
 from pixeltable.serving import FastAPIRouter
-from pydantic import BaseModel, Field
 
 import config
 import functions as f
 from call_center_api.constants import ALLOWED_UPLOAD_EXTENSIONS, ALLOWED_VIDEO_EXTENSIONS
+from call_center_api.schemas import CallDetail, CommentCreate
 from call_center_api.verticals import normalize_vertical
 
 TableModel = pxt.model_base()
@@ -230,7 +230,7 @@ api.add_query_route(path="/calls/flagged", query=flagged_calls, method="get")
 # the Reference runs one Celery worker process for the same reason.
 _inserts = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pxt-insert")
 _in_flight: dict[uuid.UUID, dict] = {}  # accepted, not yet committed: a row is invisible until computed
-_failed: dict[uuid.UUID, str] = {}  # inserts that raised before any row was stored
+_failed: dict[uuid.UUID, tuple[dict, str]] = {}  # inserts that raised before any row was stored: (row, error)
 
 
 def _insert(row: dict) -> None:
@@ -238,7 +238,8 @@ def _insert(row: dict) -> None:
         # 'ignore' stores the row even when a cell fails; the error stays on that cell.
         Calls.insert([row], on_error="ignore")
     except Exception as exc:
-        _failed[row["id"]] = f"{type(exc).__name__}: {exc}"
+        _failed[row["id"]] = (row, f"{type(exc).__name__}: {exc}")
+        Path(row["audio"] or row["video"]).unlink(missing_ok=True)  # no row will ever reference it
     finally:
         _in_flight.pop(row["id"], None)
 
@@ -300,25 +301,28 @@ def get_kpis():
 
 @api.get("/calls/{call_id}")
 def get_call(call_id: uuid.UUID):
+    pending = _unstored(call_id)  # read before the query, so an insert that commits in between is still found
     rows = detail_query().where(Calls.id == call_id).collect()
     if len(rows) == 1:
         return {**rows[0], "audio_path": f"/api/calls/{call_id}/audio", "comments": list_comments(call_id)}
-    if call_id in _in_flight or call_id in _failed:
-        return _unstored(call_id)
+    if pending is not None:
+        return pending
     raise HTTPException(status_code=404, detail="Call not found")
 
 
-def _unstored(call_id: uuid.UUID) -> dict:
-    """An accepted upload with no row yet. Pixeltable cannot say which stage it is in."""
-    row = _in_flight.get(call_id) or {}
-    error = _failed.get(call_id)
+def _unstored(call_id: uuid.UUID) -> dict | None:
+    """An accepted upload with no row yet, in the full CallDetail shape. Pixeltable cannot say which stage it is in."""
+    row, error = _failed.get(call_id) or (_in_flight.get(call_id), None)
+    if row is None:
+        return None
     return {
-        **{k: row.get(k) for k in ("call_date", "agent_id", "customer_id", "queue", "vertical", "media_type")},
+        **dict.fromkeys(CallDetail.model_fields),
+        **{k: row[k] for k in ("call_date", "agent_id", "customer_id", "queue", "vertical", "media_type", "original_filename")},
         "id": str(call_id),
+        "audio_path": f"/api/calls/{call_id}/audio",
         "status": "failed" if error else "processing",
         "error_message": error,
-        "original_filename": row.get("original_filename", ""),
-        "has_video_source": row.get("video") is not None,
+        "has_video_source": row["video"] is not None,
         "segments": [],
         "comments": [],
     }
@@ -375,24 +379,16 @@ def search(
     return list(hits.values())[:limit]
 
 
-class CommentCreate(BaseModel):
-    call_id: uuid.UUID
-    segment_id: str | None = None
-    start_sec: float = 0.0
-    author: str = Field(min_length=1, max_length=128)
-    comment: str = Field(min_length=1)
-
-
 @api.post("/comments", status_code=201)
 def create_comment(payload: CommentCreate):
     rows = Calls.where(Calls.id == payload.call_id).select(segments=Calls.segments).collect()
     if len(rows) == 0:
         raise HTTPException(status_code=404, detail="Call not found")
-    if payload.segment_id is not None:
-        prefix, _, pos = payload.segment_id.rpartition(":")
-        if prefix != str(payload.call_id) or not pos.isdigit() or int(pos) >= len(rows[0]["segments"] or []):
-            raise HTTPException(status_code=400, detail="Invalid segment for call")
-    row = {**payload.model_dump(), "created_at": datetime.now(timezone.utc)}
+    segment_ids = {f.segment_uuid(payload.call_id, pos) for pos in range(len(rows[0]["segments"] or []))}
+    if payload.segment_id is not None and payload.segment_id not in segment_ids:
+        raise HTTPException(status_code=400, detail="Invalid segment for call")
+    segment_id = str(payload.segment_id) if payload.segment_id else None
+    row = {**payload.model_dump(), "segment_id": segment_id, "created_at": datetime.now(timezone.utc)}
     stored = CoachingComments.insert([row], return_rows=True).rows[0]
     return {**row, "id": stored["id"]}
 

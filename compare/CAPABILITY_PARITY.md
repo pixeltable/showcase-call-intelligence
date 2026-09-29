@@ -25,8 +25,7 @@ LLM wording is not compared: it is the model's, not the backend's.
 |---|---|---|---|
 | List envelope | `[...]` | `{"rows": [...]}` | `add_query_route` wraps rows; the client accepts both (`requestRows`) |
 | Progress while processing | a stage per commit | `processing`, and the roster lists the call when done | a Pixeltable row commits with all its computed columns |
-| Segment ids | database UUIDs | `{call_id}:{pos}` | segments are rows of an iterator view keyed by position |
-| Comment on another call's segment | 422 (not a UUID) or 400 | 400 | request validation |
+| Segment ids | database UUIDs | UUIDv5 of the call id and the segment's position | segments are rows of an iterator view keyed by position |
 | A failed step | the call is `failed`; stages already committed stay | the failing cell and the cells computed from it hold the error; the others keep their values | per-cell errors |
 | Deleting a call that is still processing | immediate | waits for the insert, which holds the table lock | inserts lock `calls` and its views |
 | A restart while a call is processing | the `queued` row and its last status stay | the accepted call is gone: its id returns 404 and the upload stays on disk | an accepted upload lives in the service process until its row commits |

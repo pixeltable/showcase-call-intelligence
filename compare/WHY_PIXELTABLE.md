@@ -7,7 +7,7 @@ The Reference is what an AI coding assistant produces when asked for this produc
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,164 | 413 |
+| App code you maintain (lines) | 1,166 | 414 |
 | Files | 24 | 3 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |
@@ -27,14 +27,14 @@ Where the lines go (files grouped by concern by hand; the counts are measured):
 <!-- results:concerns -->
 | Concern (hand-classified; lines measured) | Reference | Pixeltable |
 |---|---|---|
-| Schema and pipeline | 478 | 158 |
+| Schema and pipeline | 480 | 161 |
 | &nbsp;&nbsp;of which schema and migrations | 211 |  |
-| &nbsp;&nbsp;of which model and media wrappers | 170 |  |
+| &nbsp;&nbsp;of which model and media wrappers | 172 |  |
 | &nbsp;&nbsp;of which orchestration and status | 97 |  |
-| Queries and HTTP | 467 | 244 |
+| Queries and HTTP | 467 | 242 |
 | Repair tooling | 187 | n/a |
 | Settings (config.py) | 32 | 11 |
-| **Total** | **1,164** | **413** |
+| **Total** | **1,166** | **414** |
 <!-- /results:concerns -->
 
 The HTTP layer is where the two are closest: both hand-write handlers for the same REST contract, and Pixeltable's are shorter because its queries name columns the way the contract does and the list routes are declared. The difference is the rest: the Reference writes the pipeline's orchestration, its state machine, its schema history, its model wrappers and the tools to repair what the pipeline can leave half-done. On Pixeltable those are the table definitions.

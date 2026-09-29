@@ -1,5 +1,6 @@
 """UDFs the schema in app.py calls. Transform semantics: compare/PIPELINE_SPEC.md."""
 
+import uuid
 from typing import TypedDict
 
 import pixeltable as pxt
@@ -115,11 +116,16 @@ def call_status(errors: list) -> str:
     return "failed" if any(e and str(e).strip() for e in errors) else "completed"
 
 
+def segment_uuid(call_id: uuid.UUID, pos: int) -> uuid.UUID:
+    """A segment's id: a UUID, as the contract types it, fixed by its call and its position in the view."""
+    return uuid.uuid5(call_id, str(pos))
+
+
 @pxt.udf
 def segments_with_ids(call_id: pxt.UUID, segments: list | None) -> list[dict]:
-    return [{"id": f"{call_id}:{pos}", "pos": pos, **seg} for pos, seg in enumerate(segments or [])]
+    return [{"id": str(segment_uuid(call_id, pos)), "pos": pos, **seg} for pos, seg in enumerate(segments or [])]
 
 
 @pxt.udf
 def segment_id(call_id: pxt.UUID, pos: int) -> str:
-    return f"{call_id}:{pos}"
+    return str(segment_uuid(call_id, pos))

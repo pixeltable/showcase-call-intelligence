@@ -32,7 +32,7 @@ jobs:
           python-version: "3.11"
       - run: python scripts/metrics.py --check
       - run: python scripts/render_results.py --check
-      - run: pip install ruff==0.16.9 pytest && ruff check .
+      - run: pip install ruff==0.16.9 pytest httpx && ruff check .
       - run: python -m pytest scripts/tests -q
 
   frontend:

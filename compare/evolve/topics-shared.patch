@@ -1,0 +1,55 @@
+diff --git a/shared/call_center_api/verticals.py b/shared/call_center_api/verticals.py
+--- a/shared/call_center_api/verticals.py
++++ b/shared/call_center_api/verticals.py
+@@ -9,6 +9,10 @@
+ 
+ DEFAULT_VERTICAL: VerticalId = "call_center"
+ VALID_VERTICALS: frozenset[str] = frozenset({"call_center", "sales", "podcast", "interview"})
++TOPICS_PROMPT = (
++    "List the 3-5 main topics discussed in this conversation. "
++    'Return ONLY JSON with key "topics": an array of short strings. No explanation.'
++)
+ 
+ 
+ @dataclass(frozen=True)
+@@ -18,6 +22,7 @@
+     sentiment: str
+     category: str
+     qa: str
++    topics: str = TOPICS_PROMPT
+ 
+ 
+ @dataclass(frozen=True)
+diff --git a/shared/call_center_api/enrichment.py b/shared/call_center_api/enrichment.py
+--- a/shared/call_center_api/enrichment.py
++++ b/shared/call_center_api/enrichment.py
+@@ -270,6 +270,18 @@
+     }
+ 
+ 
++def parse_topics(raw: str) -> list[str]:
++    """A JSON array of topic strings, or an object holding one under "topics"."""
++    text = extract_json(raw or "")
++    try:
++        parsed = json.loads(text) if text else None
++    except json.JSONDecodeError:
++        return []
++    if isinstance(parsed, dict):
++        parsed = parsed.get("topics")
++    return [str(t).strip() for t in parsed if str(t).strip()] if isinstance(parsed, list) else []
++
++
+ def normalize_category(raw: str) -> str:
+     text = (raw or "").strip().strip('"').strip("'")
+     if not text:
+diff --git a/shared/call_center_api/schemas.py b/shared/call_center_api/schemas.py
+--- a/shared/call_center_api/schemas.py
++++ b/shared/call_center_api/schemas.py
+@@ -78,6 +78,7 @@
+     action_items: list | dict | None
+     sentiment: dict | None
+     qa_scorecard: dict | None
++    topics: list[str] | None = None
+     error_message: str | None
+     segments: list[SegmentOut]
+     comments: list[CommentOut]

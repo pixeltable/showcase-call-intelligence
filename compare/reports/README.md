@@ -1,1 +1,1 @@
-Generated JSON from compare scripts (`compare_loc.py`, `compare_search.py`, …). Ignored by git. Re-run the scripts after schema or seed changes.
+Gate output from `scripts/compare_parity.py` and `scripts/compare_mutations.py`. Ignored by git. Measurements that the docs quote live in [`../results/`](../results/).

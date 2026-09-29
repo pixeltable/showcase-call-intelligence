@@ -1,0 +1,157 @@
+diff --git a/backends/reference/app/models.py b/backends/reference/app/models.py
+--- a/backends/reference/app/models.py
++++ b/backends/reference/app/models.py
+@@ -31,6 +31,7 @@
+     action_items: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+     sentiment: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+     qa_scorecard: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
++    topics: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+     updated_at: Mapped[datetime] = mapped_column(
+diff --git a/backends/reference/alembic/versions/004_topics.py b/backends/reference/alembic/versions/004_topics.py
+new file mode 100644
+--- /dev/null
++++ b/backends/reference/alembic/versions/004_topics.py
+@@ -0,0 +1,20 @@
++"""Add topics to calls."""
++
++from typing import Sequence, Union
++
++import sqlalchemy as sa
++from alembic import op
++from sqlalchemy.dialects import postgresql
++
++revision: str = "004_topics"
++down_revision: Union[str, None] = "003_vertical"
++branch_labels: Union[str, Sequence[str], None] = None
++depends_on: Union[str, Sequence[str], None] = None
++
++
++def upgrade() -> None:
++    op.add_column("calls", sa.Column("topics", postgresql.JSONB(), nullable=True))
++
++
++def downgrade() -> None:
++    op.drop_column("calls", "topics")
+diff --git a/backends/reference/app/services/ollama_client.py b/backends/reference/app/services/ollama_client.py
+--- a/backends/reference/app/services/ollama_client.py
++++ b/backends/reference/app/services/ollama_client.py
+@@ -15,6 +15,7 @@
+     parse_qa_scorecard,
+     parse_sentiment,
+     parse_summary,
++    parse_topics,
+ )
+ from call_center_api.verticals import get_profile
+ 
+@@ -26,6 +27,7 @@
+     sentiment: dict[str, Any]
+     category: str
+     qa_scorecard: dict[str, Any]
++    topics: list[str]
+ 
+ 
+ class OllamaClient:
+@@ -66,6 +68,7 @@
+                 sentiment=dict(EMPTY_SENTIMENT),
+                 category="Uncategorized",
+                 qa_scorecard=dict(EMPTY_QA),
++                topics=[],
+             )
+ 
+         summary_raw = self.chat(prompts.summary, transcript, json_mode=True)
+@@ -75,6 +78,7 @@
+         sentiment = parse_sentiment(self.chat(prompts.sentiment, transcript, json_mode=True))
+         category = normalize_category(self.chat(prompts.category, transcript))
+         qa_scorecard = parse_qa_scorecard(self.chat(prompts.qa, transcript, json_mode=True))
++        topics = parse_topics(self.chat(prompts.topics, transcript, json_mode=True))
+ 
+         return LlmResult(
+             summary=summary,
+@@ -82,4 +86,5 @@
+             sentiment=sentiment,
+             category=category,
+             qa_scorecard=qa_scorecard,
++            topics=topics,
+         )
+diff --git a/backends/reference/worker/tasks/process_call.py b/backends/reference/worker/tasks/process_call.py
+--- a/backends/reference/worker/tasks/process_call.py
++++ b/backends/reference/worker/tasks/process_call.py
+@@ -71,6 +71,7 @@
+         call.sentiment = result.sentiment
+         call.category = result.category
+         call.qa_scorecard = result.qa_scorecard
++        call.topics = result.topics
+ 
+         call.status = "embedding"
+         db.commit()
+diff --git a/backends/reference/worker/tasks/resume_call.py b/backends/reference/worker/tasks/resume_call.py
+--- a/backends/reference/worker/tasks/resume_call.py
++++ b/backends/reference/worker/tasks/resume_call.py
+@@ -43,6 +43,7 @@
+         call.sentiment = result.sentiment
+         call.category = result.category
+         call.qa_scorecard = result.qa_scorecard
++        call.topics = result.topics
+ 
+     call.status = "embedding"
+     call.error_message = None
+diff --git a/backends/reference/app/routers/calls.py b/backends/reference/app/routers/calls.py
+--- a/backends/reference/app/routers/calls.py
++++ b/backends/reference/app/routers/calls.py
+@@ -180,6 +180,7 @@
+         action_items=call.action_items,
+         sentiment=call.sentiment,
+         qa_scorecard=call.qa_scorecard,
++        topics=call.topics,
+         error_message=call.error_message,
+         segments=[SegmentOut.model_validate(s) for s in call.segments],
+         comments=[CommentOut.model_validate(c) for c in call.comments],
+diff --git a/backends/reference/worker/tasks/backfill_topics.py b/backends/reference/worker/tasks/backfill_topics.py
+new file mode 100644
+--- /dev/null
++++ b/backends/reference/worker/tasks/backfill_topics.py
+@@ -0,0 +1,34 @@
++"""Fill calls.topics for calls processed before the column existed."""
++
++from __future__ import annotations
++
++from app.models import Call, TranscriptSegment
++from app.services.diarization import flatten_transcript
++from app.services.ollama_client import OllamaClient
++from call_center_api.enrichment import parse_topics
++from call_center_api.verticals import get_profile
++from worker.celery_app import celery_app
++
++
++@celery_app.task(name="worker.tasks.backfill_topics")
++def backfill_topics() -> int:
++    from app.database import SessionLocal
++
++    db = SessionLocal()
++    client = OllamaClient()
++    try:
++        calls = db.query(Call).filter(Call.status == "completed", Call.topics.is_(None)).all()
++        for call in calls:
++            segments = (
++                db.query(TranscriptSegment)
++                .filter(TranscriptSegment.call_id == call.id)
++                .order_by(TranscriptSegment.pos)
++                .all()
++            )
++            transcript = flatten_transcript(segments)
++            prompt = get_profile(call.vertical).prompts.topics
++            call.topics = parse_topics(client.chat(prompt, transcript, json_mode=True)) if transcript.strip() else []
++            db.commit()
++        return len(calls)
++    finally:
++        db.close()
+diff --git a/backends/reference/worker/tasks/__init__.py b/backends/reference/worker/tasks/__init__.py
+--- a/backends/reference/worker/tasks/__init__.py
++++ b/backends/reference/worker/tasks/__init__.py
+@@ -1,3 +1,4 @@
+ from worker.tasks.embed_maintenance import backfill_embeddings, reembed_call  # noqa: F401
+ from worker.tasks.process_call import process_call  # noqa: F401
+ from worker.tasks.resume_call import resume_call_processing  # noqa: F401
++from worker.tasks.backfill_topics import backfill_topics  # noqa: F401

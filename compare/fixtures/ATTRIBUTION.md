@@ -54,7 +54,7 @@ Unique filenames for compare seed state keys; same bytes as upstream clips:
 
 Created via [`scripts/prepare_fixture_media.py`](../../scripts/prepare_fixture_media.py).
 
-Manifest metadata (`agent_id`, `queue`, `vertical`, etc.) is fictional — the UI maps metadata slots per vertical profile even when underlying clip content differs.
+Manifest metadata (`agent_id`, `queue`, `vertical`, etc.) is fictional: the UI maps metadata slots per vertical profile even when underlying clip content differs.
 
 ## Seed manifest
 
@@ -62,6 +62,6 @@ The canonical 10-fixture vertical matrix lives in [`manifest.json`](manifest.jso
 
 ## Removed
 
-- `billing-call.mp4` — too short (~32 KB) and produced empty transcripts.
-- `bangkok-scene.mp4` — video-only (no audio track); Reference ffmpeg extraction failed.
-- `account-verification.wav` — orphan local asset, not in the seed manifest.
+- `billing-call.mp4`: too short (~32 KB) and produced empty transcripts.
+- `bangkok-scene.mp4`: video-only (no audio track); Reference ffmpeg extraction failed.
+- `account-verification.wav`: orphan local asset, not in the seed manifest.

@@ -1,0 +1,127 @@
+{
+  "backends": {
+    "pixeltable": {
+      "app_files": 3,
+      "app_loc": 411,
+      "by_concern": {
+        "Queries and HTTP": 243,
+        "Schema and pipeline": 158,
+        "Settings (config.py)": 10
+      },
+      "classified": {
+        "intermediate_progress_visible": false,
+        "new_column_backfills_existing_rows": true,
+        "per_cell_errors": true,
+        "processes_to_run": [
+          "pxt service (the pxt daemon and its embedded Postgres start with it)"
+        ],
+        "table_versions_and_revert": true,
+        "work_runs_on_insert_from_any_writer": true
+      },
+      "config_loc": 20,
+      "file_breakdown": {
+        "backends/pixeltable/app.py": 318,
+        "backends/pixeltable/config.py": 10,
+        "backends/pixeltable/functions.py": 83
+      },
+      "migrations": null,
+      "orchestration_hops": 13,
+      "routes_declared": 2,
+      "routes_hand_written": 10,
+      "status_writes": null,
+      "tables": 2,
+      "task_queue_tasks": null,
+      "vector_indexes": 1,
+      "views": 1
+    },
+    "reference": {
+      "app_files": 24,
+      "app_loc": 1165,
+      "by_concern": {
+        "Queries and HTTP": 468,
+        "Repair tooling": 187,
+        "Schema and pipeline / model and media wrappers": 170,
+        "Schema and pipeline / orchestration and status": 97,
+        "Schema and pipeline / schema and migrations": 211,
+        "Settings (config.py)": 32
+      },
+      "classified": {
+        "intermediate_progress_visible": true,
+        "new_column_backfills_existing_rows": false,
+        "per_cell_errors": false,
+        "processes_to_run": [
+          "uvicorn API",
+          "Celery worker",
+          "Postgres with pgvector",
+          "Redis"
+        ],
+        "table_versions_and_revert": false,
+        "work_runs_on_insert_from_any_writer": false
+      },
+      "config_loc": 59,
+      "file_breakdown": {
+        "backends/reference/alembic/env.py": 35,
+        "backends/reference/alembic/versions/001_initial.py": 71,
+        "backends/reference/alembic/versions/002_video_support.py": 13,
+        "backends/reference/alembic/versions/003_vertical.py": 14,
+        "backends/reference/app/config.py": 32,
+        "backends/reference/app/database.py": 14,
+        "backends/reference/app/main.py": 26,
+        "backends/reference/app/models.py": 64,
+        "backends/reference/app/routers/admin.py": 34,
+        "backends/reference/app/routers/calls.py": 192,
+        "backends/reference/app/routers/comments.py": 38,
+        "backends/reference/app/routers/search.py": 90,
+        "backends/reference/app/services/diarization.py": 3,
+        "backends/reference/app/services/embed_service.py": 21,
+        "backends/reference/app/services/health.py": 72,
+        "backends/reference/app/services/ollama_client.py": 72,
+        "backends/reference/app/services/storage.py": 50,
+        "backends/reference/app/services/video.py": 28,
+        "backends/reference/app/services/whisperx_service.py": 46,
+        "backends/reference/worker/celery_app.py": 19,
+        "backends/reference/worker/tasks/__init__.py": 3,
+        "backends/reference/worker/tasks/embed_maintenance.py": 73,
+        "backends/reference/worker/tasks/process_call.py": 75,
+        "backends/reference/worker/tasks/resume_call.py": 80
+      },
+      "migrations": 3,
+      "orchestration_hops": 50,
+      "routes_declared": null,
+      "routes_hand_written": 15,
+      "status_writes": 11,
+      "tables": 3,
+      "task_queue_tasks": 4,
+      "vector_indexes": 1,
+      "views": null
+    }
+  },
+  "patterns": {
+    "pixeltable": {
+      "orchestration_hops": "\\.insert\\(|\\.collect\\(\\)|\\.delete\\(|pxt\\.get_table\\(|\\.recompute_columns\\(",
+      "routes_declared": "\\.add_(?:query|insert|update|delete|compute)_route\\(",
+      "routes_hand_written": "^@(?:router|app|api)\\.(?:get|post|put|patch|delete)\\(",
+      "vector_indexes": "pxt\\.EmbeddingIndex\\("
+    },
+    "reference": {
+      "migrations": "^revision(?::\\s*str)?\\s*=",
+      "orchestration_hops": "\\.delay\\(|\\bdb\\.commit\\(\\)|\\bdb\\.add\\(|\\bdb\\.query\\(|\\bdb\\.get\\(|\\bdb\\.delete\\(|\\bconn\\.execute\\(",
+      "routes_hand_written": "^@(?:router|app)\\.(?:get|post|put|patch|delete)\\(",
+      "status_writes": "\\bcall\\.status\\s*=",
+      "tables": "__tablename__\\s*=",
+      "task_queue_tasks": "@celery_app\\.task\\(",
+      "vector_indexes": "USING hnsw"
+    }
+  },
+  "shared": {
+    "app_files": 5,
+    "app_loc": 671,
+    "file_breakdown": {
+      "shared/call_center_api/constants.py": 5,
+      "shared/call_center_api/enrichment.py": 215,
+      "shared/call_center_api/schemas.py": 98,
+      "shared/call_center_api/segmentation.py": 88,
+      "shared/call_center_api/verticals.py": 265
+    }
+  }
+}

@@ -1,0 +1,1559 @@
+{
+  "environment": {
+    "measured_at": "2026-09-28T22:24:37+00:00",
+    "git_commit": "b37a52a",
+    "git_dirty": true,
+    "machine": {
+      "chip": "Apple M4 Pro",
+      "cpus": 14,
+      "memory_gb": 48,
+      "os": "Darwin 26.6.1"
+    },
+    "python": {
+      "reference": "Python 3.12.7",
+      "pixeltable": "Python 3.12.7"
+    },
+    "packages": {
+      "reference": {
+        "whisperx": "3.8.6",
+        "torch": "2.8.0",
+        "sentence-transformers": "5.7.0",
+        "fastapi": "0.139.0",
+        "sqlalchemy": "2.0.51",
+        "celery": "5.6.3"
+      },
+      "pixeltable": {
+        "pixeltable": "0.7.11",
+        "whisperx": "3.8.6",
+        "torch": "2.8.0",
+        "sentence-transformers": "5.7.0",
+        "fastapi": "0.139.0",
+        "sqlalchemy": "2.0.51"
+      }
+    },
+    "ollama": {
+      "host": "http://localhost:11434",
+      "version": "0.31.1",
+      "model": "llama3.1",
+      "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+      "docker_vm": "4 cpus, 8307830784 bytes"
+    },
+    "concurrency": "one call in flight; Reference: 1 Celery worker process; Pixeltable: 1 insert thread"
+  },
+  "first_call": {
+    "reference": {
+      "accept_sec": 0.071,
+      "complete_sec": 35.57,
+      "status": "completed",
+      "error": null,
+      "segments": 2,
+      "transitions": [
+        [
+          0.01,
+          "queued"
+        ],
+        [
+          0.52,
+          "transcribing"
+        ],
+        [
+          6.19,
+          "enriching"
+        ],
+        [
+          34.99,
+          "embedding"
+        ],
+        [
+          35.5,
+          "completed"
+        ]
+      ]
+    },
+    "pixeltable": {
+      "accept_sec": 0.02,
+      "complete_sec": 40.98,
+      "status": "completed",
+      "error": null,
+      "segments": 2,
+      "transitions": [
+        [
+          0.08,
+          "processing"
+        ],
+        [
+          40.96,
+          "completed"
+        ]
+      ]
+    }
+  },
+  "pipeline": {
+    "billing-inquiry-speech.wav": {
+      "reference": [
+        {
+          "accept_sec": 0.043,
+          "complete_sec": 45.41,
+          "status": "completed",
+          "error": null,
+          "segments": 2,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.62,
+              "transcribing"
+            ],
+            [
+              4.86,
+              "enriching"
+            ],
+            [
+              44.85,
+              "embedding"
+            ],
+            [
+              45.37,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.078,
+          "complete_sec": 30.02,
+          "status": "completed",
+          "error": null,
+          "segments": 2,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              2.57,
+              "enriching"
+            ],
+            [
+              29.94,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.048,
+          "complete_sec": 29.96,
+          "status": "completed",
+          "error": null,
+          "segments": 2,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              2.56,
+              "enriching"
+            ],
+            [
+              29.91,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.015,
+          "complete_sec": 31.37,
+          "status": "completed",
+          "error": null,
+          "segments": 2,
+          "transitions": [
+            [
+              0.11,
+              "processing"
+            ],
+            [
+              31.36,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.006,
+          "complete_sec": 30.02,
+          "status": "completed",
+          "error": null,
+          "segments": 2,
+          "transitions": [
+            [
+              0.06,
+              "processing"
+            ],
+            [
+              30.02,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.01,
+          "complete_sec": 22.86,
+          "status": "completed",
+          "error": null,
+          "segments": 2,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              22.85,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "cancellation-request.wav": {
+      "reference": [
+        {
+          "accept_sec": 0.072,
+          "complete_sec": 80.35,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.54,
+              "transcribing"
+            ],
+            [
+              27.73,
+              "enriching"
+            ],
+            [
+              79.77,
+              "embedding"
+            ],
+            [
+              80.28,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.028,
+          "complete_sec": 107.57,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              29.34,
+              "enriching"
+            ],
+            [
+              107.03,
+              "embedding"
+            ],
+            [
+              107.55,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.019,
+          "complete_sec": 72.54,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              24.0,
+              "enriching"
+            ],
+            [
+              72.01,
+              "embedding"
+            ],
+            [
+              72.52,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.014,
+          "complete_sec": 76.46,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              76.45,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.013,
+          "complete_sec": 79.35,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              79.34,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.015,
+          "complete_sec": 75.77,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              75.76,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "pursuit-happiness-video.mp4": {
+      "reference": [
+        {
+          "accept_sec": 0.05,
+          "complete_sec": 37.42,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              3.11,
+              "enriching"
+            ],
+            [
+              37.37,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.022,
+          "complete_sec": 51.46,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              3.6,
+              "enriching"
+            ],
+            [
+              51.44,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.044,
+          "complete_sec": 40.01,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              2.57,
+              "enriching"
+            ],
+            [
+              39.96,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.024,
+          "complete_sec": 40.59,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.51,
+              "processing"
+            ],
+            [
+              40.57,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.024,
+          "complete_sec": 48.09,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              48.07,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.007,
+          "complete_sec": 38.26,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              38.25,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "sales-discovery.wav": {
+      "reference": [
+        {
+          "accept_sec": 0.047,
+          "complete_sec": 100.45,
+          "status": "completed",
+          "error": null,
+          "segments": 12,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              28.3,
+              "enriching"
+            ],
+            [
+              99.88,
+              "embedding"
+            ],
+            [
+              100.4,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.083,
+          "complete_sec": 84.42,
+          "status": "completed",
+          "error": null,
+          "segments": 12,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              24.11,
+              "enriching"
+            ],
+            [
+              84.34,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.02,
+          "complete_sec": 90.49,
+          "status": "completed",
+          "error": null,
+          "segments": 12,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              24.01,
+              "enriching"
+            ],
+            [
+              90.47,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.019,
+          "complete_sec": 102.32,
+          "status": "completed",
+          "error": null,
+          "segments": 12,
+          "transitions": [
+            [
+              0.09,
+              "processing"
+            ],
+            [
+              102.3,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.012,
+          "complete_sec": 81.67,
+          "status": "completed",
+          "error": null,
+          "segments": 12,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              81.65,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.011,
+          "complete_sec": 82.65,
+          "status": "completed",
+          "error": null,
+          "segments": 12,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              82.64,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "sales-demo-video.mp4": {
+      "reference": [
+        {
+          "accept_sec": 0.053,
+          "complete_sec": 57.2,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              2.56,
+              "enriching"
+            ],
+            [
+              57.14,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.048,
+          "complete_sec": 44.08,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              3.08,
+              "enriching"
+            ],
+            [
+              44.03,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.032,
+          "complete_sec": 36.57,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              2.57,
+              "enriching"
+            ],
+            [
+              36.54,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.017,
+          "complete_sec": 55.62,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.08,
+              "processing"
+            ],
+            [
+              55.61,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.018,
+          "complete_sec": 44.7,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              44.68,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.009,
+          "complete_sec": 37.57,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.04,
+              "processing"
+            ],
+            [
+              37.56,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "podcast-excerpt-audio.wav": {
+      "reference": [
+        {
+          "accept_sec": 0.088,
+          "complete_sec": 103.23,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              41.64,
+              "enriching"
+            ],
+            [
+              102.63,
+              "embedding"
+            ],
+            [
+              103.14,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.027,
+          "complete_sec": 85.65,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              36.33,
+              "enriching"
+            ],
+            [
+              85.11,
+              "embedding"
+            ],
+            [
+              85.62,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.023,
+          "complete_sec": 97.44,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              37.4,
+              "enriching"
+            ],
+            [
+              96.91,
+              "embedding"
+            ],
+            [
+              97.42,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.031,
+          "complete_sec": 111.0,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.06,
+              "processing"
+            ],
+            [
+              110.97,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.022,
+          "complete_sec": 89.68,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.08,
+              "processing"
+            ],
+            [
+              89.65,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.014,
+          "complete_sec": 100.24,
+          "status": "completed",
+          "error": null,
+          "segments": 5,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              100.23,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "lex-fridman-excerpt.mp4": {
+      "reference": [
+        {
+          "accept_sec": 0.067,
+          "complete_sec": 166.15,
+          "status": "completed",
+          "error": null,
+          "segments": 9,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              61.36,
+              "enriching"
+            ],
+            [
+              166.09,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.059,
+          "complete_sec": 111.73,
+          "status": "completed",
+          "error": null,
+          "segments": 9,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              52.5,
+              "enriching"
+            ],
+            [
+              111.67,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.125,
+          "complete_sec": 143.04,
+          "status": "completed",
+          "error": null,
+          "segments": 9,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              58.47,
+              "enriching"
+            ],
+            [
+              142.91,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.03,
+          "complete_sec": 161.34,
+          "status": "completed",
+          "error": null,
+          "segments": 10,
+          "transitions": [
+            [
+              0.06,
+              "processing"
+            ],
+            [
+              161.31,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.045,
+          "complete_sec": 124.8,
+          "status": "completed",
+          "error": null,
+          "segments": 10,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              124.75,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.028,
+          "complete_sec": 127.87,
+          "status": "completed",
+          "error": null,
+          "segments": 10,
+          "transitions": [
+            [
+              0.06,
+              "processing"
+            ],
+            [
+              127.84,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "travel-briefing.mp4": {
+      "reference": [
+        {
+          "accept_sec": 0.087,
+          "complete_sec": 166.81,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              58.47,
+              "diarizing"
+            ],
+            [
+              58.98,
+              "enriching"
+            ],
+            [
+              166.2,
+              "embedding"
+            ],
+            [
+              166.72,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.072,
+          "complete_sec": 153.21,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              52.53,
+              "enriching"
+            ],
+            [
+              153.14,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.071,
+          "complete_sec": 170.0,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              51.78,
+              "enriching"
+            ],
+            [
+              169.93,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.03,
+          "complete_sec": 207.84,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.06,
+              "processing"
+            ],
+            [
+              207.81,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.037,
+          "complete_sec": 166.84,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              166.8,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.027,
+          "complete_sec": 145.82,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              145.8,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "interview-behavioral.wav": {
+      "reference": [
+        {
+          "accept_sec": 0.112,
+          "complete_sec": 80.8,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.55,
+              "transcribing"
+            ],
+            [
+              19.86,
+              "enriching"
+            ],
+            [
+              80.69,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.042,
+          "complete_sec": 60.48,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              15.38,
+              "enriching"
+            ],
+            [
+              60.43,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.042,
+          "complete_sec": 57.03,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              13.36,
+              "enriching"
+            ],
+            [
+              56.99,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.012,
+          "complete_sec": 81.58,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.06,
+              "processing"
+            ],
+            [
+              81.57,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.012,
+          "complete_sec": 58.41,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              58.4,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.01,
+          "complete_sec": 57.23,
+          "status": "completed",
+          "error": null,
+          "segments": 8,
+          "transitions": [
+            [
+              0.04,
+              "processing"
+            ],
+            [
+              57.22,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    },
+    "interview-session.mp4": {
+      "reference": [
+        {
+          "accept_sec": 0.105,
+          "complete_sec": 167.74,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.01,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              60.49,
+              "enriching"
+            ],
+            [
+              167.63,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.07,
+          "complete_sec": 139.37,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.51,
+              "transcribing"
+            ],
+            [
+              52.5,
+              "enriching"
+            ],
+            [
+              139.3,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.056,
+          "complete_sec": 142.57,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.0,
+              "queued"
+            ],
+            [
+              0.52,
+              "transcribing"
+            ],
+            [
+              51.3,
+              "enriching"
+            ],
+            [
+              142.52,
+              "completed"
+            ]
+          ]
+        }
+      ],
+      "pixeltable": [
+        {
+          "accept_sec": 0.036,
+          "complete_sec": 202.62,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              202.58,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.061,
+          "complete_sec": 138.76,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.07,
+              "processing"
+            ],
+            [
+              138.7,
+              "completed"
+            ]
+          ]
+        },
+        {
+          "accept_sec": 0.05,
+          "complete_sec": 145.47,
+          "status": "completed",
+          "error": null,
+          "segments": 15,
+          "transitions": [
+            [
+              0.05,
+              "processing"
+            ],
+            [
+              145.42,
+              "completed"
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  "pipeline_rounds": 3,
+  "pipeline_measured_at": "2026-09-28T20:34:30+00:00",
+  "reads": {
+    "list calls": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 4.38,
+        "p95_ms": 7.15,
+        "mean_ms": 4.73
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 5.42,
+        "p95_ms": 6.41,
+        "mean_ms": 5.52
+      }
+    },
+    "call detail": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 6.26,
+        "p95_ms": 8.16,
+        "mean_ms": 6.24
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 10.35,
+        "p95_ms": 11.93,
+        "mean_ms": 10.44
+      }
+    },
+    "kpis": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 6.03,
+        "p95_ms": 7.83,
+        "mean_ms": 6.03
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 10.49,
+        "p95_ms": 12.03,
+        "mean_ms": 10.65
+      }
+    },
+    "flagged": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 6.78,
+        "p95_ms": 8.44,
+        "mean_ms": 6.56
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 4.81,
+        "p95_ms": 5.5,
+        "mean_ms": 4.78
+      }
+    },
+    "search keyword": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 4.81,
+        "p95_ms": 8.33,
+        "mean_ms": 5.2
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 8.22,
+        "p95_ms": 9.97,
+        "mean_ms": 8.31
+      }
+    },
+    "search semantic": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 53.49,
+        "p95_ms": 73.47,
+        "mean_ms": 54.85
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 69.94,
+        "p95_ms": 88.15,
+        "mean_ms": 72.81
+      }
+    },
+    "search hybrid": {
+      "reference": {
+        "n": 50,
+        "p50_ms": 56.09,
+        "p95_ms": 61.84,
+        "mean_ms": 56.41
+      },
+      "pixeltable": {
+        "n": 50,
+        "p50_ms": 74.78,
+        "p95_ms": 83.98,
+        "mean_ms": 75.55
+      }
+    }
+  },
+  "reads_corpus": {
+    "calls": 10
+  },
+  "reads_measured_at": "2026-09-28T22:24:37+00:00"
+}

@@ -1,4 +1,4 @@
-"""Segment extraction and transcript formatting — compare/PIPELINE_SPEC.md."""
+"""Segment extraction and transcript formatting (compare/PIPELINE_SPEC.md)."""
 
 from __future__ import annotations
 

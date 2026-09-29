@@ -36,19 +36,24 @@ export function WaveformPlayer({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
+  const regionsRef = useRef<RegionsPlugin | null>(null);
   const onReadyRef = useRef(onReady);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [duration, setDuration] = useState(0);
   const [displayTime, setDisplayTime] = useState(0);
 
   useEffect(() => {
     onReadyRef.current = onReady;
-  }, [onReady]);
+    onTimeUpdateRef.current = onTimeUpdate;
+  }, [onReady, onTimeUpdate]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const regionsPlugin = RegionsPlugin.create();
+    regionsRef.current = regionsPlugin;
     const ws = WaveSurfer.create({
       container: containerRef.current,
       waveColor: "#475569",
@@ -62,7 +67,7 @@ export function WaveformPlayer({
     if (drivePlayback) {
       ws.on("timeupdate", (time) => {
         setDisplayTime(time);
-        onTimeUpdate(time);
+        onTimeUpdateRef.current(time);
       });
       ws.on("play", () => setIsPlaying(true));
       ws.on("pause", () => setIsPlaying(false));
@@ -75,15 +80,7 @@ export function WaveformPlayer({
       if (!drivePlayback) ws.setVolume(0);
       setDuration(ws.getDuration());
       setDisplayTime(ws.getCurrentTime());
-      regions.forEach((r) =>
-        regionsPlugin.addRegion({
-          start: r.start,
-          end: r.end,
-          color: r.color ?? "rgba(239, 68, 68, 0.25)",
-          drag: false,
-          resize: false,
-        }),
-      );
+      setIsReady(true);
       const seek = (time: number) => ws.setTime(time);
       const playClip = (startSec: number, endSec: number) => {
         void ws.play(startSec, endSec);
@@ -95,9 +92,27 @@ export function WaveformPlayer({
     return () => {
       ws.destroy();
       wsRef.current = null;
+      regionsRef.current = null;
       setIsPlaying(false);
+      setIsReady(false);
     };
-  }, [audioUrl, drivePlayback, regions]);
+  }, [audioUrl, drivePlayback]);
+
+  // Regions change without reloading the audio.
+  useEffect(() => {
+    const plugin = regionsRef.current;
+    if (!plugin || !isReady) return;
+    plugin.clearRegions();
+    regions.forEach((r) =>
+      plugin.addRegion({
+        start: r.start,
+        end: r.end,
+        color: r.color ?? "rgba(239, 68, 68, 0.25)",
+        drag: false,
+        resize: false,
+      }),
+    );
+  }, [regions, isReady]);
 
   useEffect(() => {
     const ws = wsRef.current;

@@ -1,4 +1,4 @@
-"""Extract audio from video uploads via ffmpeg (MP3 — matches Pixeltable extract_audio)."""
+"""Extract MP3 audio from a video with ffmpeg, as Pixeltable's extract_audio does."""
 
 from __future__ import annotations
 
@@ -26,7 +26,10 @@ def extract_audio_from_video(video_path: Path, output_path: Path) -> None:
         "2",
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("ffmpeg timed out extracting audio") from exc
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "ffmpeg failed to extract audio")
     if not output_path.is_file():

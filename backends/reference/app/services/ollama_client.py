@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+from app.config import settings
 from call_center_api.enrichment import (
     EMPTY_QA,
     EMPTY_SENTIMENT,
@@ -15,8 +17,6 @@ from call_center_api.enrichment import (
     parse_summary,
 )
 from call_center_api.verticals import get_profile
-
-from app.config import settings
 
 
 @dataclass

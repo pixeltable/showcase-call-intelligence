@@ -1,4 +1,4 @@
-"""Vertical profiles — prompts and UI labels per use case (call center, sales, podcast, interview)."""
+"""Vertical profiles: prompts and UI labels per use case (call center, sales, podcast, interview)."""
 
 from __future__ import annotations
 

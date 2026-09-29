@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { SearchHit } from "../api/client";
-import { api } from "../api";
+import { api } from "../api/client";
 
 const PAGE_SIZE = 5;
 
@@ -70,7 +70,7 @@ export function GlobalSearch({ onSelectCall }: Props) {
       <h2 className="mb-2 text-lg font-semibold">Global Search</h2>
       {semanticUnavailable && (
         <p className="mb-2 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          Semantic search may be unavailable — {embedCheck?.detail ?? "embedding model not ready"}. Keyword
+          Semantic search may be unavailable: {embedCheck?.detail ?? "embedding model not ready"}. Keyword
           matches still work. Ensure <code className="text-amber-100">EMBED_MODEL</code> is installed, then
           re-seed or backfill embeddings.
         </p>

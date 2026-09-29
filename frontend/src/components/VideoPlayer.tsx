@@ -33,7 +33,12 @@ export function VideoPlayer({
     if (!video) return;
 
     const seek = (time: number) => {
-      if (Number.isFinite(time)) video.currentTime = time;
+      if (!Number.isFinite(time)) return;
+      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        video.currentTime = time;
+      } else {
+        video.addEventListener("loadedmetadata", () => (video.currentTime = time), { once: true });
+      }
     };
     const playClip = (startSec: number, endSec: number) => {
       clipEndRef.current = endSec;

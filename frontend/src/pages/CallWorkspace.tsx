@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { Segment } from "../api/client";
-import { api } from "../api";
+import { TERMINAL_STATUSES, api } from "../api/client";
 import { CoachingComments } from "../components/CoachingComments";
 import { IntelligenceSidebar } from "../components/IntelligenceSidebar";
 import { SyncTranscript } from "../components/SyncTranscript";
@@ -31,55 +31,48 @@ export function CallWorkspace() {
     enabled: !!callId,
     refetchInterval: (q) => {
       const status = q.state.data?.status;
-      return status && status !== "completed" && status !== "failed" ? 3000 : false;
+      return status && !TERMINAL_STATUSES.has(status) ? 3000 : false;
     },
   });
 
   const hasVideoSource = call?.has_video_source ?? false;
+  // A video that fails to load falls back to the waveform as the player.
+  const videoDrives = hasVideoSource && !videoError;
 
   const mediaSeek = useCallback(
     (time: number) => {
       waveformSeekRef.current(time);
-      if (hasVideoSource) videoSeekRef.current(time);
+      if (videoDrives) videoSeekRef.current(time);
     },
-    [hasVideoSource],
+    [videoDrives],
   );
 
-  useEffect(() => {
-    if (!call || !highlightSegmentId) return;
-    const seg = call.segments.find((s) => s.id === highlightSegmentId);
-    if (seg) setSelectedSegment(seg);
-  }, [call, highlightSegmentId]);
+  const segments = call?.segments;
+  const sentiment = call?.sentiment;
 
   useEffect(() => {
-    if (searchParams.get("t") === null && !highlightSegmentId) return;
-    const t = Number(searchParams.get("t") ?? "0");
-    setCurrentTime(t);
-    mediaSeek(t);
-  }, [searchParams, highlightSegmentId, mediaSeek]);
+    const seg = highlightSegmentId ? segments?.find((s) => s.id === highlightSegmentId) : undefined;
+    if (seg) setSelectedSegment(seg);
+  }, [segments, highlightSegmentId]);
 
   const activeSegmentId = useMemo(() => {
-    if (highlightSegmentId && call?.segments.some((s) => s.id === highlightSegmentId)) {
-      return highlightSegmentId;
-    }
-    if (!call?.segments.length) return null;
-    const match = call.segments.find((s) => currentTime >= s.start_sec && currentTime <= s.end_sec);
+    const match = segments?.find((s) => currentTime >= s.start_sec && currentTime <= s.end_sec);
     return match?.id ?? null;
-  }, [call, currentTime, highlightSegmentId]);
+  }, [segments, currentTime]);
 
+  // Keyed on the fields regions use, so a refetch after a comment does not rebuild the waveform.
   const regions = useMemo(() => {
-    const moments = sentimentMoments(call?.sentiment ?? null);
-    return moments
-      .map((moment) => momentRegion(moment, call?.segments ?? []))
+    return sentimentMoments(sentiment ?? null)
+      .map((moment) => momentRegion(moment, segments ?? []))
       .filter((region): region is NonNullable<typeof region> => region !== null);
-  }, [call]);
+  }, [sentiment, segments]);
 
   const updateSeekParams = (time: number, segmentId: string) => {
     setSearchParams({ t: String(time), seg: segmentId }, { replace: true });
   };
 
   if (isLoading) return <p className="p-6 text-slate-400">Loading call...</p>;
-  if (error || !call) {
+  if (!call) {
     const message = error instanceof Error ? error.message : "Failed to load call.";
     return <p className="p-6 text-red-400">{message}</p>;
   }
@@ -88,6 +81,11 @@ export function CallWorkspace() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-6">
+      {error && (
+        <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-400">
+          Refresh failed: {error instanceof Error ? error.message : "unknown error"}. Showing the last loaded state.
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <Link to="/" className="text-sm text-indigo-400 hover:underline">
@@ -161,13 +159,11 @@ export function CallWorkspace() {
                 audioUrl={api.audioUrl(call.id)}
                 regions={regions}
                 currentTime={currentTime}
-                onTimeUpdate={hasVideoSource ? () => {} : setCurrentTime}
-                drivePlayback={!hasVideoSource}
+                onTimeUpdate={videoDrives ? () => {} : setCurrentTime}
+                drivePlayback={!videoDrives}
                 onReady={(seek, playClip) => {
                   waveformSeekRef.current = seek;
-                  if (!hasVideoSource) {
-                    audioPlayClipRef.current = playClip;
-                  }
+                  audioPlayClipRef.current = playClip;
                   if (!Number.isNaN(initialTime)) seek(initialTime);
                 }}
               />
@@ -196,10 +192,8 @@ export function CallWorkspace() {
               mediaSeek(time);
               updateSeekParams(time, segmentId);
               setSelectedSegment(seg ?? null);
-              if (hasVideoSource && seg) {
-                videoPlayClipRef.current(time, seg.end_sec);
-              } else if (seg) {
-                audioPlayClipRef.current(time, seg.end_sec);
+              if (seg) {
+                (videoDrives ? videoPlayClipRef : audioPlayClipRef).current(time, seg.end_sec);
               }
             }}
             onSelectSegment={setSelectedSegment}

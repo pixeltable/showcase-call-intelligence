@@ -12,10 +12,13 @@ from worker.celery_app import celery_app
     time_limit=settings.celery_task_time_limit_sec,
 )
 def process_call(call_id: str) -> None:
+    from pathlib import Path
+
     from app.database import SessionLocal
     from app.models import Call, TranscriptSegment
     from app.services.diarization import extract_segments, flatten_transcript
     from app.services.ollama_client import OllamaClient
+    from app.services.video import extract_audio_from_video
     from app.services.whisperx_service import transcribe_diarize
     from worker.tasks.embed_maintenance import embed_call_segments
 
@@ -28,6 +31,8 @@ def process_call(call_id: str) -> None:
         call.status = "transcribing"
         db.commit()
 
+        if call.video_path and not Path(call.audio_path).is_file():
+            extract_audio_from_video(Path(call.video_path), Path(call.audio_path))
         diarized = transcribe_diarize(call.audio_path)
 
         call.status = "diarizing"

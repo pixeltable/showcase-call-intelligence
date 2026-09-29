@@ -1,0 +1,42 @@
+diff --git a/backends/pixeltable/app.py b/backends/pixeltable/app.py
+--- a/backends/pixeltable/app.py
++++ b/backends/pixeltable/app.py
+@@ -83,6 +83,7 @@
+         transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
+     )
+     qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
++    topics = f.parse_topics_content(transcript, ollama(f.chat_messages(vertical, transcript, "topics")))
+ 
+ 
+ class TranscriptSegments(
+@@ -178,6 +179,7 @@
+         action_items=Calls.action_items,
+         sentiment=Calls.sentiment,
+         qa_scorecard=Calls.qa_scorecard,
++        topics=Calls.topics,
+         error_message=f.first_error(errors()),
+         segments=f.segments_with_ids(Calls.id, Calls.segments),
+     )
+diff --git a/backends/pixeltable/functions.py b/backends/pixeltable/functions.py
+--- a/backends/pixeltable/functions.py
++++ b/backends/pixeltable/functions.py
+@@ -15,6 +15,7 @@
+     parse_qa_scorecard,
+     parse_sentiment,
+     parse_summary,
++    parse_topics,
+ )
+ from call_center_api.segmentation import extract_segments as label_segments
+ from call_center_api.segmentation import flatten_transcript_dicts
+@@ -90,6 +91,11 @@
+ 
+ 
+ @pxt.udf
++def parse_topics_content(transcript: str | None, raw: str | None) -> list[str]:
++    return parse_topics(raw or "") if transcript else []
++
++
++@pxt.udf
+ def is_flagged(sentiment: dict | None, threshold: float = FLAGGED_SENTIMENT_THRESHOLD) -> bool:
+     if not isinstance(sentiment, dict):
+         return False

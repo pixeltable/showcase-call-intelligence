@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CallDetail, Segment } from "../api/client";
-import { api } from "../api";
+import { api } from "../api/client";
 
 interface Props {
   call: CallDetail;
@@ -24,7 +24,7 @@ export function CoachingComments({ call, selectedSegment }: Props) {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!comment.trim()) return;
+    if (!comment.trim() || !author.trim() || mutation.isPending) return;
     mutation.mutate({
       call_id: call.id,
       segment_id: selectedSegment?.id,
@@ -46,7 +46,7 @@ export function CoachingComments({ call, selectedSegment }: Props) {
         {call.comments.map((c) => (
           <li key={c.id} className="rounded border border-slate-800 bg-slate-950/50 p-2 text-sm">
             <p className="text-xs text-slate-400">
-              {c.author} · {c.start_sec.toFixed(1)}s
+              {c.author} · {c.start_sec.toFixed(1)}s{c.segment_id ? " · on a segment" : ""}
             </p>
             <p>{c.comment}</p>
           </li>
@@ -67,9 +67,18 @@ export function CoachingComments({ call, selectedSegment }: Props) {
           className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
           placeholder="Great de-escalation here..."
         />
-        <button type="submit" className="rounded bg-indigo-600 px-3 py-1.5 text-sm hover:bg-indigo-500">
-          Add Comment
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="rounded bg-indigo-600 px-3 py-1.5 text-sm hover:bg-indigo-500 disabled:opacity-50"
+        >
+          {mutation.isPending ? "Saving..." : "Add Comment"}
         </button>
+        {mutation.isError && (
+          <p className="text-sm text-red-400">
+            {mutation.error instanceof Error ? mutation.error.message : "Failed to save comment."}
+          </p>
+        )}
       </form>
     </div>
   );

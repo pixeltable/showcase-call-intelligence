@@ -8,13 +8,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
-from call_center_api.enrichment import has_negative_sentiment_moments
-from call_center_api.verticals import normalize_vertical
 from app.database import get_db
-from app.models import Call, TranscriptSegment
+from app.models import Call
+from app.services.storage import delete_upload_files, resolve_upload_file, safe_download_name, save_upload
 from call_center_api.constants import FLAGGED_SENTIMENT_THRESHOLD
+from call_center_api.enrichment import has_negative_sentiment_moments
 from call_center_api.schemas import CallDetail, CallSummary, CallUploadResponse, CommentOut, KpiResponse, SegmentOut
-from app.services.storage import delete_upload_files, save_upload
+from call_center_api.verticals import normalize_vertical
 from worker.tasks.process_call import process_call
 
 router = APIRouter(prefix="/api/calls", tags=["calls"])
@@ -55,7 +55,7 @@ def _to_summary(call: Call) -> CallSummary:
 
 
 @router.post("/upload", response_model=CallUploadResponse, status_code=202)
-async def upload_call(
+def upload_call(
     audio: UploadFile = File(...),
     call_date: datetime = Form(...),
     agent_id: str = Form(...),
@@ -68,8 +68,6 @@ async def upload_call(
     try:
         audio_path, original_filename, video_path, media_type = save_upload(audio, call_id)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     call = Call(
@@ -102,19 +100,18 @@ def list_calls(
     limit: int = 50,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Call).order_by(Call.call_date.desc()).limit(min(limit, 200))
+    q = db.query(Call)
     if agent_id:
         q = q.filter(Call.agent_id == agent_id)
     if queue:
         q = q.filter(Call.queue == queue)
     if min_handle_time is not None:
         q = q.filter(Call.handle_time_sec >= min_handle_time)
-
-    calls = q.all()
-    results = [_to_summary(c) for c in calls]
     if sentiment_label:
-        results = [c for c in results if c.sentiment_label == sentiment_label]
-    return results
+        q = q.filter(Call.sentiment["label"].astext == sentiment_label)
+
+    calls = q.order_by(Call.call_date.desc()).limit(max(1, min(limit, 200))).all()
+    return [_to_summary(c) for c in calls]
 
 
 @router.get("/kpis", response_model=KpiResponse)
@@ -192,23 +189,19 @@ def get_call(call_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.get("/{call_id}/audio")
 def get_call_audio(call_id: uuid.UUID, db: Session = Depends(get_db)):
-    from pathlib import Path
-
     from fastapi.responses import FileResponse
 
     call = db.get(Call, call_id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    path = Path(call.audio_path)
-    if not path.is_file():
+    path = resolve_upload_file(call.audio_path)
+    if path is None:
         raise HTTPException(status_code=404, detail="Audio file not found")
-    return FileResponse(path, filename=call.original_filename)
+    return FileResponse(path, filename=safe_download_name(call.original_filename, path.name))
 
 
 @router.get("/{call_id}/video")
 def get_call_video(call_id: uuid.UUID, db: Session = Depends(get_db)):
-    from pathlib import Path
-
     from fastapi.responses import FileResponse
 
     call = db.get(Call, call_id)
@@ -216,10 +209,10 @@ def get_call_video(call_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Call not found")
     if not call.video_path:
         raise HTTPException(status_code=404, detail="Video not available for this call")
-    path = Path(call.video_path)
-    if not path.is_file():
+    path = resolve_upload_file(call.video_path)
+    if path is None:
         raise HTTPException(status_code=404, detail="Video file not found")
-    return FileResponse(path, filename=call.original_filename)
+    return FileResponse(path, filename=safe_download_name(call.original_filename, path.name))
 
 
 @router.delete("/{call_id}", status_code=204)

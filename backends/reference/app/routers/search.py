@@ -9,12 +9,17 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Call, TranscriptSegment
-from call_center_api.schemas import SearchHit
 from app.services.embed_service import embed_text
+from call_center_api.schemas import SearchHit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/search", tags=["search"])
+
+
+def _like_contains(query: str) -> str:
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 def _search_hit(
@@ -61,7 +66,7 @@ def search_transcripts(
             .join(Call, Call.id == TranscriptSegment.call_id)
             .filter(
                 Call.status == "completed",
-                TranscriptSegment.text.ilike(f"%{query}%"),
+                TranscriptSegment.text.ilike(_like_contains(query), escape="\\"),
             )
             .order_by(Call.call_date.desc())
             .limit(limit)
@@ -77,24 +82,25 @@ def search_transcripts(
     if mode in ("semantic", "hybrid") and len(hits) < limit:
         try:
             embedding = embed_text(query)
+            distance = TranscriptSegment.embedding.cosine_distance(embedding)
             semantic_rows = (
-                db.query(TranscriptSegment, Call)
+                db.query(TranscriptSegment, Call, distance)
                 .join(Call, Call.id == TranscriptSegment.call_id)
                 .filter(
                     Call.status == "completed",
                     TranscriptSegment.embedding.isnot(None),
                 )
-                .order_by(TranscriptSegment.embedding.cosine_distance(embedding))
+                .order_by(distance)
                 .limit(limit)
                 .all()
             )
 
-            for segment, call in semantic_rows:
+            for segment, call, dist in semantic_rows:
                 key = (str(call.id), str(segment.id))
                 if key in seen:
                     continue
                 seen.add(key)
-                hits.append(_search_hit(segment, call, score=None, match_type="semantic"))
+                hits.append(_search_hit(segment, call, score=1.0 - float(dist), match_type="semantic"))
         except Exception as exc:
             logger.warning("Semantic search failed for query=%r: %s", query, exc)
 

@@ -1,0 +1,39 @@
+diff --git a/shared/call_center_api/verticals.py b/shared/call_center_api/verticals.py
+--- a/shared/call_center_api/verticals.py
++++ b/shared/call_center_api/verticals.py
+@@ -58,7 +58,7 @@
+     prompts=EnrichmentPrompts(
+         summary=(
+             "Summarize this call center recording for a supervisor. "
+-            'Return ONLY JSON with key "bullets": an array of 3-5 plain-English strings. '
++            'Return ONLY JSON with key "bullets": an array of exactly 3 plain-English strings. '
+             "Cover the customer issue, what the agent did, and any follow-up. "
+             "No markdown, no labels, no preamble."
+         ),
+@@ -112,7 +112,7 @@
+     prompts=EnrichmentPrompts(
+         summary=(
+             "Summarize this sales conversation for a sales manager. "
+-            'Return ONLY JSON with key "bullets": an array of 3-5 plain-English strings. '
++            'Return ONLY JSON with key "bullets": an array of exactly 3 plain-English strings. '
+             "Cover the prospect's situation, objections raised, what the rep did, and agreed next steps. "
+             "No markdown, no labels, no preamble."
+         ),
+@@ -167,7 +167,7 @@
+     prompts=EnrichmentPrompts(
+         summary=(
+             "Summarize this podcast or media recording for a producer. "
+-            'Return ONLY JSON with key "bullets": an array of 3-5 plain-English strings. '
++            'Return ONLY JSON with key "bullets": an array of exactly 3 plain-English strings. '
+             "Cover main themes, notable quotes or moments, and any editorial highlights. "
+             "No markdown, no labels, no preamble."
+         ),
+@@ -224,7 +224,7 @@
+     prompts=EnrichmentPrompts(
+         summary=(
+             "Summarize this interview for a hiring manager. "
+-            'Return ONLY JSON with key "bullets": an array of 3-5 plain-English strings. '
++            'Return ONLY JSON with key "bullets": an array of exactly 3 plain-English strings. '
+             "Cover candidate strengths, concerns or gaps, and recommended next steps. "
+             "No markdown, no labels, no preamble."
+         ),

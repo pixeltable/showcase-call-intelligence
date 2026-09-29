@@ -1,4 +1,4 @@
-"""Extract audio from video uploads via ffmpeg (MP3 — matches Pixeltable extract_audio)."""
+"""Extract MP3 audio from a video with ffmpeg, as Pixeltable's extract_audio does."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ def is_video_extension(ext: str) -> bool:
 
 
 def extract_audio_from_video(video_path: Path, output_path: Path) -> None:
+    """Writes a temporary file and renames it on success, so a failed or killed run never leaves a partial
+    output_path that a retry would take for finished audio."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    partial = output_path.with_suffix(".partial" + output_path.suffix)
     cmd = [
         "ffmpeg",
         "-y",
@@ -24,10 +27,14 @@ def extract_audio_from_video(video_path: Path, output_path: Path) -> None:
         "libmp3lame",
         "-q:a",
         "2",
-        str(output_path),
+        str(partial),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "ffmpeg failed to extract audio")
-    if not output_path.is_file():
-        raise RuntimeError("ffmpeg did not produce output audio file")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired as exc:
+        partial.unlink(missing_ok=True)
+        raise RuntimeError("ffmpeg timed out extracting audio") from exc
+    if result.returncode != 0 or not partial.is_file():
+        partial.unlink(missing_ok=True)
+        raise RuntimeError(result.stderr.strip() or "ffmpeg did not produce output audio file")
+    partial.replace(output_path)

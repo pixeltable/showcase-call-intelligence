@@ -1,4 +1,4 @@
-"""Shared WhisperX segment labeling and transcript flattening — compare/PIPELINE_SPEC.md."""
+"""WhisperX segment labeling and transcript flattening (compare/PIPELINE_SPEC.md)."""
 
 from __future__ import annotations
 

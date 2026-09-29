@@ -171,7 +171,8 @@ def flagged_calls(limit: int = 50):
 @functools.cache
 def detail_query() -> pxt.Query:
     """CallDetail without comments. Built once per process and filtered per request, as declared routes
-    are: building a query resolves the table once per selected expression."""
+    are: building a query resolves the table once per selected expression (pixeltable/pixeltable#1688;
+    once that is fixed, these cached queries can go)."""
     return Calls.select(
         **summary_columns(),
         original_filename=Calls.original_filename,

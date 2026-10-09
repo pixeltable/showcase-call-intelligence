@@ -9,30 +9,34 @@
 3. Recover from an LLM outage: Ollama stops while a call is processed, then comes back.
 
 Each change is a patch in compare/evolve/, applied, timed, verified over HTTP, and reverted, so
-the repo's line counts keep measuring the product. Writes compare/results/evolve.json.
+the repo's line counts keep measuring the product. Writes a new report under compare/reports/evolve/.
+Historical compare/results/evolve.json is never updated by this command.
 Run through the environment ./scripts/run_compare.sh exports; re-seed afterwards.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import signal
 import subprocess
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from benchmark import environment  # noqa: E402
 from lib.client import FIXTURES, backends, load_manifest, reset_llm  # noqa: E402
 from metrics import code_lines_in  # noqa: E402
 
 EVOLVE = ROOT / "compare" / "evolve"
-OUT = ROOT / "compare" / "results" / "evolve.json"
+REPORT_DIR = ROOT / "compare" / "reports" / "evolve"
 PIDS = ROOT / ".compare-pids"
 REF_DIR, PXT_DIR = ROOT / "backends" / "reference", ROOT / "backends" / "pixeltable"
 STATE_FILE = ROOT / ".compare-state.json"
@@ -380,38 +384,89 @@ def recover_failed_step() -> dict:
     return result
 
 
-def main() -> int:
+def setup_provenance() -> dict:
+    """Capture the unmodified checkout and seeded dataset before an experiment applies patches."""
+    model = os.getenv("OLLAMA_MODEL", "llama3.1")
+    setup = {
+        "environment": environment(os.getenv("OLLAMA_HOST", "http://localhost:11434"), model),
+        "fixture_manifest_sha256": hashlib.sha256((FIXTURES / "manifest.json").read_bytes()).hexdigest(),
+        "seed_state_sha256": hashlib.sha256(STATE_FILE.read_bytes()).hexdigest(),
+        "fixture_sha256": {
+            entry["file"]: hashlib.sha256((FIXTURES / entry["file"]).read_bytes()).hexdigest()
+            for entry in load_manifest(fresh_dates=False)
+        },
+        "patch_sha256": {
+            patch.name: hashlib.sha256(patch.read_bytes()).hexdigest() for patch in sorted(EVOLVE.glob("*.patch"))
+        },
+        "model_config": {name: os.getenv(name) for name in (
+            "WHISPERX_MODEL", "WHISPERX_DIARIZATION_MODEL", "EMBED_MODEL", "PXT_ENRICHMENT_PROFILE",
+        )},
+        "rows": len(state()),
+    }
+    setup["identity"] = hashlib.sha256(json.dumps(setup, sort_keys=True).encode()).hexdigest()
+    return setup
+
+
+def timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--full-reprocess", action="store_true", help="Also time the Reference's only existing path")
     parser.add_argument("--only", choices=["add_field", "rerun_step", "recover"])
-    args = parser.parse_args()
-    if subprocess.run(["git", "diff", "--quiet", "--", "shared", "backends"], cwd=ROOT).returncode != 0:
-        print("note: the tree has uncommitted changes; patches apply on top of them")
-    report = json.loads(OUT.read_text()) if OUT.is_file() else {}
-    report["measured_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    report["model"] = os.getenv("OLLAMA_MODEL", "llama3.1")
-    report["rows"] = len(state())
+    parser.add_argument("--output", type=Path, help="New JSON report path; existing files are refused before any experiment")
+    args = parser.parse_args(argv)
+    run_id = str(uuid.uuid4())
+    output = args.output or REPORT_DIR / f"{run_id}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = output.open("x")  # Reserve exclusively before provider checks, patches, or service operations.
+    except FileExistsError:
+        parser.error(f"Report already exists: {output}")
+    report = {"schema_version": 2, "run_id": run_id, "started_at": timestamp(),
+              "full_reprocess": args.full_reprocess, "status": "running", "experiments": {}}
     experiments = {
         "add_field": add_field,
         "rerun_step": lambda: rerun_step(args.full_reprocess),
         "recover": recover_failed_step,
     }
     failed = []
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    for key, run in experiments.items():
-        if args.only not in (None, key):
-            continue
+    exit_code = 0
+    with handle:
         try:
-            report[key] = run()
-        except Exception as exc:  # recorded, and the next experiment still runs
-            failed.append(key)
-            print(f"\n{key} did not finish: {exc}")
+            report["setup"] = setup_provenance()
+            for key, run in experiments.items():
+                if args.only not in (None, key):
+                    continue
+                entry = {"status": "running", "setup_identity": report["setup"]["identity"],
+                         "started_at": timestamp()}
+                report["experiments"][key] = entry
+                try:
+                    entry["result"] = run()
+                    entry["status"] = "succeeded"
+                except Exception as exc:
+                    entry.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+                    failed.append(key)
+                    print(f"\n{key} did not finish: {exc}")
+                finally:
+                    entry["finished_at"] = timestamp()
+            report["status"] = "failed" if failed else "succeeded"
+            exit_code = int(bool(failed))
+        except KeyboardInterrupt:
+            report["status"] = "interrupted"
+            for entry in report["experiments"].values():
+                if entry["status"] == "running":
+                    entry.update(status="interrupted", error="KeyboardInterrupt")
+            exit_code = 130
+        except Exception as exc:
+            report.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+            exit_code = 1
         finally:
-            OUT.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"\nwrote {OUT.relative_to(ROOT)}. Re-seed before the next benchmark: ./scripts/run_compare.sh seed")
-    if failed:
-        print(f"re-run with --only {' / --only '.join(failed)}")
-    return 1 if failed else 0
+            report["finished_at"] = timestamp()
+            handle.write(json.dumps(report, indent=2) + "\n")
+    print(f"\nwrote {output}. Historical published results are unchanged. Re-seed before the next benchmark.")
+    return exit_code
 
 
 if __name__ == "__main__":

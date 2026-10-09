@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Dashboard } from "./pages/Dashboard";
 import { CallWorkspace } from "./pages/CallWorkspace";
 
-export default function App() {
+export function App() {
   return (
     <BrowserRouter>
       <Routes>

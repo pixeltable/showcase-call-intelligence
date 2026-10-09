@@ -51,8 +51,8 @@ export function IntelligenceSidebar({ call }: Props) {
   const rationale = typeof call.sentiment?.rationale === "string" ? call.sentiment.rationale.trim() : "";
 
   return (
-    <aside className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <h2 className="text-lg font-semibold">Intelligence</h2>
+    <aside className="order-first space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:order-last">
+      <h2 className="text-lg font-semibold">Recording summary</h2>
 
       <section>
         <h3 className="text-xs uppercase tracking-wide text-slate-400">Summary</h3>
@@ -69,13 +69,19 @@ export function IntelligenceSidebar({ call }: Props) {
         )}
       </section>
 
+      {call.enrichment_profile === "core" ? (
+        <p className="text-sm text-slate-400">This lesson requests a transcript and summary. Category, action items, sentiment, and review scores are not computed.</p>
+      ) : (
+      <details className="space-y-4 border-t border-slate-800 pt-3">
+        <summary className="cursor-pointer text-sm text-slate-300">Additional model assessments</summary>
+        <p className="text-sm text-slate-400">Illustrative model estimates. Review them against the source; scores have not been calibrated for business decisions.</p>
       <section>
         <h3 className="text-xs uppercase tracking-wide text-slate-400">Action Items</h3>
         <ul className="mt-1 list-disc space-y-1 pl-4 text-sm">
           {actionItems.length ? (
             actionItems.map((item, i) => <li key={i}>{String(item)}</li>)
           ) : (
-            <li className="list-none pl-0 text-slate-500">No action items identified</li>
+            <li className="list-none pl-0 text-slate-400">{call.action_items == null ? "Action items unavailable." : "No action items identified."}</li>
           )}
         </ul>
       </section>
@@ -86,7 +92,7 @@ export function IntelligenceSidebar({ call }: Props) {
       </section>
 
       <section>
-        <h3 className="text-xs uppercase tracking-wide text-slate-400">QA Scorecard</h3>
+        <h3 className="text-xs uppercase tracking-wide text-slate-400">Example review scores</h3>
         <dl className="mt-1 grid grid-cols-2 gap-2 text-sm">
           {(["empathy", "resolution", "compliance", "overall"] as const).map((key) => (
             <div key={key}>
@@ -136,6 +142,8 @@ export function IntelligenceSidebar({ call }: Props) {
             ))}
           </div>
         </section>
+      )}
+      </details>
       )}
     </aside>
   );

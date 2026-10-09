@@ -32,7 +32,7 @@ scripts/                  # run_compare.sh, seed, gates, benchmarks, metrics, re
 
 ## Development setup
 
-Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.15; historical benchmark JSON retains the release actually measured.
+Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.15; historical benchmark JSON retains the release actually measured. Start with the [core lesson](README.md#run-the-first-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
 
 ```bash
 cp .env.example .env                                  # set HF_TOKEN
@@ -51,6 +51,7 @@ Without services, as CI runs them:
 ```bash
 (cd shared && uv run --with pytest python -m pytest tests -q)
 (cd backends/pixeltable && uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q)
+(cd backends/pixeltable && PXT_ENRICHMENT_PROFILE=core uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q -k 'core_profile or extension')
 (cd backends/reference && uv run --frozen --with pytest python -m pytest tests/test_contract.py -q)
 uvx ruff@0.16.9 check . && uv run --with pytest python -m pytest scripts/tests -q
 uv run python scripts/metrics.py --check
@@ -63,12 +64,14 @@ With both stacks up and seeded:
 ```bash
 uv run python scripts/compare_all.py                  # gates: parity on the seeded fixtures, then mutations
 uv run python scripts/benchmark.py                    # timings -> compare/results/benchmarks.json
-uv run python scripts/bench_evolve.py --full-reprocess  # change costs -> compare/results/evolve.json; re-seed after
+uv run python scripts/bench_evolve.py --full-reprocess  # new invocation report -> compare/reports/evolve/; re-seed after
 uv run python scripts/metrics.py && uv run python scripts/render_results.py
 (cd backends/pixeltable && PXT_INSERT_SMOKE=1 uv run python -m unittest tests.test_insert_smoke -v)
 ```
 
 Run the scripts through the environment `run_compare.sh` sets up: they read `REF_API`, `PXT_API`, `PIXELTABLE_HOME` and `PXT_PORT` from it. Seeding warms model processes. The benchmark's initial call warms the current process state and is excluded from the medians; a dedicated cold-start experiment must separately record process restarts and prewarming.
+
+Evolution runs never merge with or overwrite `compare/results/evolve.json`. Each invocation reserves a new report, records source/setup/model/fixture/patch identity, and gives each attempted experiment its own status and timestamps. `--only` records only its selected experiment; failures retain errors without old success metrics. Review a complete compatible run before deliberately replacing published results and regenerating documents. Partial reports are observations, not a publication of all three experiments.
 
 | Script | Does |
 |---|---|
@@ -78,7 +81,7 @@ Run the scripts through the environment `run_compare.sh` sets up: they read `REF
 | `compare_mutations.py` | gate: comments and delete, verified down to each store |
 | `compare_all.py` | both gates |
 | `benchmark.py` | pipeline and read timings |
-| `bench_evolve.py` | add a field to live data; re-run one step after a prompt change; recover from an LLM outage |
+| `bench_evolve.py` | add a field; selectively rerun a step; recover from an outage; save a new invocation report under `compare/reports/evolve/` |
 | `metrics.py` | code and architecture counts from source |
 | `render_results.py` | charts and doc tables from `compare/results/` |
 | `fetch_fixtures.py`, `prepare_fixture_media.py`, `generate_fixture_audio.py`, `validate_fixture_manifest.py` | fixture media |

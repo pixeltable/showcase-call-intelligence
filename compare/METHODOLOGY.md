@@ -21,7 +21,7 @@ Device selection is a separate limit. The Reference explicitly chooses CPU for A
 | Correctness | [`compare_parity.py`](../scripts/compare_parity.py) on the seeded fixtures; [`compare_mutations.py`](../scripts/compare_mutations.py) on fresh uploads, checking each store directly after delete. | `reports/` (gitignored) |
 | Pipeline time | [`benchmark.py`](../scripts/benchmark.py): upload to `completed`, polled every 0.5 s; one call in flight; every fixture on one backend then the other, order flipped each round; median of the rounds. Before each call Ollama reloads the model, untimed. One initial call per backend is reported as a warm-up of the current service state, without a verified cold-start guarantee. | [`results/benchmarks.json`](results/benchmarks.json) |
 | Read latency | same script: 5 warm-up then 50 requests per endpoint per backend, interleaved, over the seeded corpus; p50 and p95. | same |
-| Change cost | [`bench_evolve.py`](../scripts/bench_evolve.py) applies each patch in [`evolve/`](evolve/), runs the operator steps, verifies over HTTP, and reverts. Lines are counted the way `metrics.py` counts code. | [`results/evolve.json`](results/evolve.json) |
+| Change cost | [`bench_evolve.py`](../scripts/bench_evolve.py) applies each patch in [`evolve/`](evolve/), runs the operator steps, verifies over HTTP, and reverts. Lines are counted the way `metrics.py` counts code. Each new invocation records its own setup, fixture/patch hashes, experiment status, and timestamps under `reports/evolve/`; it never merges or overwrites published measurements. | Historical publication: [`results/evolve.json`](results/evolve.json) |
 
 `CLASSIFIED` in `metrics.py` holds what no regex derives (processes to run, whether a new column backfills existing rows, whether progress is visible), labelled as hand-classified wherever it appears.
 
@@ -86,6 +86,8 @@ The original published comparison reported these defects from reading and runnin
 ## October 2026 review and upgrade
 
 The backend now resolves Pixeltable 0.7.15. The detailed [review](../docs/REVIEW.md) distinguishes current validation from the retained 0.7.11 runtime measurements. Source counts and generated charts are refreshed independently of latency and evolution results.
+
+The first lesson uses a separate core profile that requests only the summary enrichment. It is outside the historical comparison, whose default full profile still requests all five enrichments. Both use the same TableModel/router implementation. No core-profile timing or quality claim is inferred from the full-profile measurements.
 
 | Area | Defect | Current change |
 |---|---|---|

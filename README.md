@@ -7,7 +7,7 @@ Give a coding agent a backend it can extend without rebuilding media storage, de
 
 Both serve the same React UI and REST contract, use the same models and fixtures, and have shared parity gates. Upload a recording to extract its audio, transcribe and diarize it, derive summaries and follow-ups, search individual segments, and attach a coaching note to the evidence. The comparison makes the backend work behind an AI-generated demo inspectable: what the application owns, what Pixeltable maintains, and what still needs deployment engineering.
 
-- **Build:** [run the app](#run-it), then [extend a computed column](#build-with-a-coding-agent).
+- **Build:** [run the first lesson](#run-the-first-lesson), then [extend one field](#extend-one-field-then-recompute-it).
 - **Verify without model downloads:** [run the deterministic backend tests](#verify-the-backend-without-models).
 - **Evaluate:** read the [methodology](compare/METHODOLOGY.md), [pipeline specification](compare/PIPELINE_SPEC.md), and [review with validation boundaries](docs/REVIEW.md).
 
@@ -15,12 +15,60 @@ The current backend targets [Pixeltable **0.7.15**](https://pypi.org/project/pix
 
 Speaker roles, sentiment, and QA scores are illustrative model outputs. Role labels use a first-speaker heuristic, and the fixtures include synthetic calls and repeated video excerpts. These fixtures validate software behavior; they do not establish ASR accuracy, diarization accuracy, or business decision quality.
 
+## Run the first lesson
+
+Start with one six-second billing fixture on the Pixeltable backend. The **core** profile stores the transcript and summary, indexes segments, and keeps comments anchored to source evidence. Category, action items, sentiment, and QA are **not requested** and remain null. The UI leads with the summary and evidence; optional assessments belong to the full profile. Upload metadata has editable demo defaults under a disclosure, so it remains easy to see what is fixture data.
+
+Prerequisites for real local models: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. For a first integration check without model downloads or provider tokens, use the [deterministic tests](#verify-the-backend-without-models).
+
+```bash
+git clone https://github.com/pixeltable/showcase-call-intelligence.git && cd showcase-call-intelligence
+cp .env.example .env                                  # set HF_TOKEN for real diarization
+uv sync --frozen
+(cd backends/pixeltable && uv sync --frozen)
+(cd frontend && npm ci)
+docker compose up -d ollama
+docker compose exec ollama ollama pull llama3.1        # about 5 GB
+./scripts/run_pixeltable.sh                           # keep this terminal open for the UI
+```
+
+In another terminal, from the repository:
+
+```bash
+./scripts/run_pixeltable.sh seed                      # add one fixture; no resets or duplicate uploads
+```
+
+Open **http://localhost:5175**. The API is on **:8002**, with its own catalog and uploads under `data/lesson/`. This path starts one Pixeltable service, one UI, and Ollama. It needs no Reference backend, Celery, Redis, or separate Postgres container. Model packages and weights are still needed for ASR and embeddings.
+
+Press Ctrl-C in the UI terminal, then run `./scripts/run_pixeltable.sh stop` to stop the lesson service and daemon while preserving data. The shared Ollama container remains available to other applications. The launcher fixes the core profile in this dedicated catalog; the comparison launcher uses its separate full-profile catalog. Applying one profile to the other's existing tables is a schema change, not a presentation switch.
+
+## Extend one field, then recompute it
+
+```bash
+./scripts/run_pixeltable.sh extend
+```
+
+The [runnable exercise](examples/extend_call.py) adds a billing-review business rule computed from the stored transcript, changes its expression without recomputing, then explicitly recomputes only that field. It checks that the transcript, summary, segment identifiers, and an evidence comment remain unchanged. ASR, Ollama, and embeddings are not invoked. The exercise removes its temporary field and probe comment when done, so it can be repeated without schema drift.
+
+Start a coding agent in this repository with the [Pixeltable skill](https://github.com/pixeltable/pixeltable-skill) and [CONTRIBUTING.md](CONTRIBUTING.md). Ask it to explain the exercise, then declare a new field in `TableModel`, expose it through the shared contract, and demonstrate the same preservation checks. Keep provider calls in computed columns, segment expansion in an iterator view, and lookup in an embedding index. Inspect `pxt schema diff` before applying a schema change, and explicitly recompute changed expressions. The [pipeline map](compare/BACKEND_MAPPING.md) shows each responsibility.
+
+## Verify the backend without models
+
+```bash
+cd backends/pixeltable
+uv sync --frozen
+uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q
+PXT_ENRICHMENT_PROFILE=core uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q -k 'core_profile or extension'
+```
+
+This test suite creates a temporary catalog and exercises the real tables, computed-column execution, audio/video handling, segment view, vector index, API validation, comments, deletion, and model failure reporting. Deterministic substitutes replace the ASR, LLM, and embedding providers. It needs no Docker, provider tokens, or downloaded model weights, and does not touch an existing catalog. A successful run verifies backend integration; a real provider run is still a separate check.
+
 ![Code each backend owns, and what a change to live data costs](compare/results/summary.svg)
 
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,171 | 442 |
+| App code you maintain (lines) | 1,171 | 459 |
 | Files | 24 | 3 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |
@@ -37,7 +85,7 @@ Speaker roles, sentiment, and QA scores are illustrative model outputs. Role lab
 
 The HTTP layer is where the two are closest: both hand-write handlers for the same REST contract. Most of the difference is behind it: the Reference writes the pipeline's orchestration, a status column it updates after each stage, its schema history, wrappers around each model, and tools to repair calls the pipeline left half-done. On Pixeltable that is the table definition below. [Where the lines go](compare/WHY_PIXELTABLE.md#measured-from-source).
 
-## The whole Pixeltable pipeline
+## Inspect the Pixeltable declarations
 
 <!-- results:pipeline_code -->
 ```python
@@ -67,14 +115,20 @@ class Calls(TableModel, name="calls"):
     handle_time_sec = f.handle_time(segments)
 
     summary = f.parse_summary_content(transcript, ollama(f.chat_messages(vertical, transcript, "summary")))
-    action_items = f.parse_action_items_content(
-        transcript, ollama(f.chat_messages(vertical, transcript, "action_items"))
-    )
-    sentiment = f.parse_sentiment_content(transcript, ollama(f.chat_messages(vertical, transcript, "sentiment")))
-    category = f.parse_category_content(
-        transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
-    )
-    qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
+    if config.ENRICHMENT_PROFILE == "core":
+        action_items: pxt.Json | None
+        sentiment: pxt.Json | None
+        category: pxt.String | None
+        qa_scorecard: pxt.Json | None
+    else:
+        action_items = f.parse_action_items_content(
+            transcript, ollama(f.chat_messages(vertical, transcript, "action_items"))
+        )
+        sentiment = f.parse_sentiment_content(transcript, ollama(f.chat_messages(vertical, transcript, "sentiment")))
+        category = f.parse_category_content(
+            transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
+        )
+        qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
 
 
 class TranscriptSegments(
@@ -89,21 +143,17 @@ class TranscriptSegments(
 
 `pxt schema update app.py call_center` creates the tables, and inserting a row computes every column, its segment rows and their embeddings. Pixeltable schedules the computed-column dependencies and records cell failures. The application keeps the upload and review contract; a failed cell keeps its error beside the other results.
 
-## Build with a coding agent
+## Optional full comparison
 
-Start the agent in this repository with the [Pixeltable skill](https://github.com/pixeltable/pixeltable-skill) and [CONTRIBUTING.md](CONTRIBUTING.md). A useful first task is: add a follow-up recommendation computed from the existing transcript, expose it in the shared API and UI, and show how to recompute that field on existing calls while keeping transcripts and comment anchors unchanged. The [evolution examples](compare/evolve/) demonstrate those changes on both implementations.
-
-Keep model calls in computed columns, segment expansion in an iterator view, and semantic lookup in an embedding index. Keep product rules and parsers in the shared package. Apply changes with `pxt schema diff` and `pxt schema update`, run the required recompute for changed expressions, then `pxt service update ... -f`. Read `pxt errors call_center/calls` before retrying failed cells. The [pipeline map](compare/BACKEND_MAPPING.md) shows where each responsibility lives.
-
-## Verify the backend without models
+The comparison keeps all five enrichments and runs both implementations against the original fixtures and contract. Its source counts describe the full application, including the core lesson option; its runtime/evolution measurements remain historical 0.7.11 observations. See the [methodology](compare/METHODOLOGY.md) for fairness and device-selection limits.
 
 ```bash
-cd backends/pixeltable
-uv sync --frozen
-uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q
+(cd backends/reference && uv sync --frozen)
+./scripts/run_compare.sh                              # both APIs, one worker, two UIs and all Docker services
+./scripts/run_compare.sh seed                         # RESET both comparison stores; ingest all ten fixtures
 ```
 
-This test suite creates a temporary catalog and exercises the real tables, computed-column execution, audio/video handling, segment view, vector index, API validation, comments, deletion, and model failure reporting. Deterministic substitutes replace the ASR, LLM, and embedding providers. It needs no Docker, provider tokens, or downloaded model weights, and does not touch an existing catalog. A successful run verifies backend integration; a real provider run is still a separate check.
+Reference UI: **http://localhost:5173**, API **:8001**. Pixeltable comparison UI: **http://localhost:5174**, API **:8000**. This comparison uses `data/pixeltable/` and `data/reference/`, separate from the lesson. **Seeding deletes existing comparison data and uploads.** Use dedicated demo data.
 
 ## Changing the running system
 
@@ -204,35 +254,6 @@ Both backends make the same WhisperX and LLM calls, so most of the pipeline's ti
 
 More, and what neither has: [compare/WHY_PIXELTABLE.md](compare/WHY_PIXELTABLE.md#where-the-reference-is-ahead).
 
-## Run it
-
-Prerequisites: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted.
-
-```bash
-git clone https://github.com/pixeltable/showcase-call-intelligence.git && cd showcase-call-intelligence
-cp .env.example .env                                  # set HF_TOKEN
-docker compose up -d
-docker compose exec ollama ollama pull llama3.1       # about 5 GB
-uv sync --frozen && (cd backends/pixeltable && uv sync --frozen) && (cd backends/reference && uv sync --frozen) && (cd frontend && npm ci)
-./scripts/run_compare.sh                              # both APIs, the Celery worker, both UIs
-./scripts/run_compare.sh seed                         # ingest the 10 fixtures into each backend
-```
-
-| UI | Backend | API |
-|---|---|---|
-| http://localhost:5173 | Reference | :8001 |
-| http://localhost:5174 | Pixeltable | :8000 |
-
-**Seeding resets both stores and deletes existing demo uploads.** Use a dedicated checkout and its demo data. Seeding is slow: each call makes five LLM requests to an Ollama that runs on the CPU. Then open a call, click a transcript segment to seek the audio or video, search for "billing" or "cancel", and leave a coaching comment on a segment. `./scripts/run_compare.sh stop` stops everything and keeps the data.
-
-To run the Pixeltable side alone, from `backends/pixeltable` with `.env` exported (the catalog defaults to `~/.pixeltable`):
-
-```bash
-uv run --frozen pxt schema check app.py
-uv run --frozen pxt schema update app.py call_center -f
-uv run --frozen pxt service update app.py call_center --port 8000 -f
-```
-
 ## Measure it
 
 With both stacks up and seeded:
@@ -240,7 +261,7 @@ With both stacks up and seeded:
 ```bash
 uv run python scripts/compare_all.py                     # parity and mutation gates
 uv run python scripts/benchmark.py                       # timings
-uv run python scripts/bench_evolve.py --full-reprocess   # change costs; re-seed afterwards
+uv run python scripts/bench_evolve.py --full-reprocess   # new invocation report; re-seed afterwards
 uv run python scripts/metrics.py && uv run python scripts/render_results.py
 ```
 
@@ -249,6 +270,8 @@ Every number above is written into this file by `render_results.py` from [`compa
 <!-- results:environment -->
 Apple M4 Pro, 14 cores, 48 GB, Darwin 26.6.1; Python 3.12.7; Pixeltable 0.7.11, WhisperX 3.8.6, torch 2.8.0; Ollama 0.31.1 serving `llama3.1` (46e0c10c039e) in Docker (4 cpus, 8307830784 bytes). Pipeline measured 2026-09-28T20:34:30+00:00, reads 2026-09-28T22:24:37+00:00, at `b37a52a` with local changes.
 <!-- /results:environment -->
+
+Evolution runs write new reports under `compare/reports/evolve/`, with setup identity and explicit status per attempted experiment. Partial and failed runs never relabel or replace the published `evolve.json`. Publishing new results requires an intentional review of a complete compatible run.
 
 Source counts are refreshed when code changes. Runtime measurements require a fresh full run on both stacks before making a claim about the current release. The benchmark warms whichever service processes are already running; it does not prove a cold start. It verifies Ollama cache reset and fingerprints application source to avoid combining measurements from different dirty checkouts.
 

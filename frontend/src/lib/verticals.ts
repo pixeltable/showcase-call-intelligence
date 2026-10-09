@@ -100,7 +100,7 @@ const PROFILES: Record<VerticalId, VerticalProfile> = {
       qaEmpathy: "Rapport",
       qaResolution: "Answer depth",
       qaCompliance: "Fair process",
-      qaOverall: "Hire signal",
+      qaOverall: "Review score",
       kpiRecordings: "Interviews (7d)",
       kpiDuration: "Avg duration (sec)",
     },

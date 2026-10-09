@@ -27,6 +27,7 @@ export function Dashboard() {
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const settle = useCallback((done: string[]) => setPendingIds((ids) => ids.filter((id) => !done.includes(id))), []);
   const { data: health } = useQuery({ queryKey: ["health"], queryFn: api.getHealth, staleTime: 60_000 });
+  const showEnrichments = health?.enrichment_profile !== "core";
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
@@ -40,11 +41,9 @@ export function Dashboard() {
           )}
         </div>
         <p className="text-slate-400">
-          Upload recordings from call centers, sales, podcasts, or interviews. Triage signals and search transcripts.
+          Start with one recording. Review its summary, search the transcript, and leave a comment at a specific moment.
         </p>
       </header>
-
-      <KpiBanner />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <UploadForm onUploaded={(id) => setPendingIds((ids) => [...ids, id])} />
@@ -59,33 +58,39 @@ export function Dashboard() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <select
+      <details className="border-y border-slate-800 py-3">
+        <summary className="cursor-pointer text-sm text-slate-300">Recording metrics and filters</summary>
+        <KpiBanner showEnrichments={showEnrichments} />
+        {showEnrichments && <p className="mb-3 text-sm text-slate-400">Sentiment and review scores are model estimates for this example. They have not been calibrated for business decisions.</p>}
+        <div className="flex flex-wrap gap-3">
+        {showEnrichments && <select
           aria-label="Filter recordings by sentiment"
           value={sentimentFilter}
           onChange={(e) => setSentimentFilter(e.target.value)}
-          className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm sm:w-80"
         >
           <option value="">All sentiments</option>
           <option value="negative">Negative</option>
           <option value="neutral">Neutral</option>
           <option value="positive">Positive</option>
-        </select>
+        </select>}
         <input
-          aria-label="Filter recordings by queue, stage, or series"
+          aria-label="Filter recordings by group"
           value={queueInput}
           onChange={(e) => setQueueInput(e.target.value)}
-          placeholder="Filter by queue / stage / series"
-          className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+          placeholder="Queue, stage, series, or role"
+          className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm sm:w-80"
         />
       </div>
+      </details>
 
       <CallRoster
         onSelect={(id) => navigate(`/calls/${id}`)}
-        sentimentFilter={sentimentFilter}
+        sentimentFilter={showEnrichments ? sentimentFilter : ""}
         queueFilter={queueFilter}
         pendingIds={pendingIds}
         onSettled={settle}
+        showEnrichments={showEnrichments}
       />
     </main>
   );

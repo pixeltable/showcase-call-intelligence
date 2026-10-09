@@ -1,4 +1,5 @@
 export interface CallSummary {
+  enrichment_profile?: "core" | "full";
   id: string;
   call_date: string;
   agent_id: string;
@@ -46,12 +47,13 @@ export interface CallDetail extends CallSummary {
 export interface Kpis {
   call_count: number;
   avg_handle_time_sec: number;
-  avg_sentiment_score: number;
+  avg_sentiment_score: number | null;
 }
 
 export interface HealthResponse {
   status: "ok" | "degraded";
   backend: "reference" | "pixeltable";
+  enrichment_profile?: "core" | "full";
   checks: Record<string, { ok: boolean; detail?: string | null }>;
 }
 

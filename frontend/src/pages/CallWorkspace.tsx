@@ -125,7 +125,7 @@ export function CallWorkspace() {
             )}
           </div>
         </div>
-        <span
+        {call.sentiment?.label != null && <span
           className={`rounded px-3 py-1 text-sm ${
             call.sentiment?.label === "negative"
               ? "bg-red-500/20 text-red-300"
@@ -135,7 +135,7 @@ export function CallWorkspace() {
           }`}
         >
           {String(call.sentiment?.label ?? "unknown")}
-        </span>
+        </span>}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">

@@ -19,9 +19,10 @@ interface Props {
   /** Uploaded ids not yet finished. A backend may list a call only once processing finishes. */
   pendingIds: string[];
   onSettled: (ids: string[]) => void;
+  showEnrichments?: boolean;
 }
 
-export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds, onSettled }: Props) {
+export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds, onSettled, showEnrichments = true }: Props) {
   const [missingIds, setMissingIds] = useState<string[]>([]);
   const { data: calls = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["calls", sentimentFilter, queueFilter],
@@ -55,7 +56,6 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
     void queryClient.invalidateQueries({ queryKey: ["calls"] });
   }, [pending, pendingIds, onSettled, queryClient]);
 
-  const headerLabels = getProfile(calls[0]?.vertical).labels;
   const waiting = pendingIds.filter((id) => !calls.some((c) => c.id === id)).length;
   const unavailable = pending.filter((q) => q.isError).length;
 
@@ -81,18 +81,18 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
       )}
       {isLoading && <p className="px-3 py-4 text-center text-sm text-slate-400">Loading recordings...</p>}
       <div className="overflow-x-auto" role="region" aria-label="Recording list" tabIndex={0}>
-      <table className="min-w-[1000px] w-full text-sm">
+      <table className={`${showEnrichments ? "min-w-[1000px]" : "min-w-[760px]"} w-full text-sm`}>
         <caption className="sr-only">Recordings and processing status. Open a recording to review its transcript and intelligence.</caption>
         <thead className="bg-slate-900 text-left text-xs uppercase text-slate-400">
           <tr>
             <th className="px-3 py-2">Date</th>
             <th className="px-3 py-2">Type</th>
-            <th className="px-3 py-2">{headerLabels.rosterAgent}</th>
-            <th className="px-3 py-2">{headerLabels.rosterCustomer}</th>
-            <th className="px-3 py-2">{headerLabels.rosterQueue}</th>
+            <th className="px-3 py-2">Participant 1</th>
+            <th className="px-3 py-2">Participant 2</th>
+            <th className="px-3 py-2">Group</th>
             <th className="px-3 py-2">Duration</th>
-            <th className="px-3 py-2">Category</th>
-            <th className="px-3 py-2">Sentiment</th>
+            {showEnrichments && <th className="px-3 py-2">Category</th>}
+            {showEnrichments && <th className="px-3 py-2">Sentiment</th>}
             <th className="px-3 py-2">Status</th>
           </tr>
         </thead>
@@ -114,18 +114,18 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
               <td className="px-3 py-2">{call.customer_id}</td>
               <td className="px-3 py-2">{call.queue}</td>
               <td className="px-3 py-2">{call.handle_time_sec != null ? `${call.handle_time_sec.toFixed(0)}s` : "-"}</td>
-              <td className="px-3 py-2">{call.category ?? "-"}</td>
-              <td className="px-3 py-2">
+              {showEnrichments && <td className="px-3 py-2">{call.category ?? "—"}</td>}
+              {showEnrichments && <td className="px-3 py-2">
                 <span className={`rounded px-2 py-0.5 text-xs ${sentimentClass(call.sentiment_label)}`}>
                   {call.sentiment_label ?? "-"}
                 </span>
-              </td>
+              </td>}
               <td className="px-3 py-2 capitalize">{call.status}</td>
             </tr>
           ))}
           {calls.length === 0 && !isLoading && !isError && (
             <tr>
-              <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
+              <td colSpan={showEnrichments ? 9 : 7} className="px-3 py-6 text-center text-slate-400">
                 {sentimentFilter || queueFilter ? "No recordings match these filters. Try another sentiment or queue." : "No recordings yet. Upload one to get started."}
               </td>
             </tr>

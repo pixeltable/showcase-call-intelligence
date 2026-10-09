@@ -1,7 +1,8 @@
 """Call intelligence on Pixeltable: schema, pipeline, and HTTP in one file.
 
 Insert a call and Pixeltable extracts the audio from a video, transcribes and diarizes it with
-WhisperX, labels the speakers, runs five Ollama enrichments, and embeds every segment for search.
+WhisperX, labels the speakers, derives a summary, and embeds every segment for search. The full
+profile also derives action items, sentiment, category, and QA; the core lesson leaves those null.
 Nothing below schedules that work, records its progress, or cleans up after it: the columns
 declare what each row contains, and a failed cell keeps its error beside the others.
 
@@ -85,14 +86,20 @@ class Calls(TableModel, name="calls"):
     handle_time_sec = f.handle_time(segments)
 
     summary = f.parse_summary_content(transcript, ollama(f.chat_messages(vertical, transcript, "summary")))
-    action_items = f.parse_action_items_content(
-        transcript, ollama(f.chat_messages(vertical, transcript, "action_items"))
-    )
-    sentiment = f.parse_sentiment_content(transcript, ollama(f.chat_messages(vertical, transcript, "sentiment")))
-    category = f.parse_category_content(
-        transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
-    )
-    qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
+    if config.ENRICHMENT_PROFILE == "core":
+        action_items: pxt.Json | None
+        sentiment: pxt.Json | None
+        category: pxt.String | None
+        qa_scorecard: pxt.Json | None
+    else:
+        action_items = f.parse_action_items_content(
+            transcript, ollama(f.chat_messages(vertical, transcript, "action_items"))
+        )
+        sentiment = f.parse_sentiment_content(transcript, ollama(f.chat_messages(vertical, transcript, "sentiment")))
+        category = f.parse_category_content(
+            transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
+        )
+        qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
 
 
 class TranscriptSegments(
@@ -119,10 +126,12 @@ class CoachingComments(TableModel, name="coaching_comments"):
 
 def errors(t=Calls):
     """Per-cell errors in pipeline order. A failed cell also fails every column computed from it."""
-    return [t.audio.errormsg, t.video.errormsg, t.extracted_audio.errormsg, t.source_audio.errormsg,
+    result = [t.audio.errormsg, t.video.errormsg, t.extracted_audio.errormsg, t.source_audio.errormsg,
             t.diarized.errormsg, t.segments.errormsg, t.transcript.errormsg, t.handle_time_sec.errormsg,
-            t.summary.errormsg, t.action_items.errormsg, t.sentiment.errormsg, t.category.errormsg,
-            t.qa_scorecard.errormsg]  # fmt: skip
+            t.summary.errormsg]
+    if config.ENRICHMENT_PROFILE == "full":
+        result += [t.action_items.errormsg, t.sentiment.errormsg, t.category.errormsg, t.qa_scorecard.errormsg]
+    return result
 
 
 def no_errors(t=Calls):
@@ -151,6 +160,7 @@ def summary_columns() -> dict:
         sentiment_score=Calls.sentiment.score,
         media_type=Calls.media_type,
         has_video_source=Calls.video != None,  # noqa: E711
+        enrichment_profile=config.ENRICHMENT_PROFILE,
     )
 
 
@@ -317,7 +327,10 @@ def get_kpis():
         .collect()
     )
     row = rows[0] if len(rows) else dict.fromkeys(KpiResponse.model_fields, 0)
-    return {k: v or 0 for k, v in row.items()}
+    result = {k: v or 0 for k, v in row.items()}
+    if config.ENRICHMENT_PROFILE == "core":
+        result["avg_sentiment_score"] = None
+    return result
 
 
 @api.get("/calls/{call_id}", response_model=CallDetail)
@@ -344,6 +357,7 @@ def _unstored(call_id: uuid.UUID) -> dict | None:
         "status": "failed" if error else "processing",
         "error_message": error,
         "has_video_source": row["video"] is not None,
+        "enrichment_profile": config.ENRICHMENT_PROFILE,
         "segments": [],
         "comments": [],
     }
@@ -432,7 +446,8 @@ def health():
     checks = {"catalog": _check(lambda: Calls.table and None), "ollama": _check(_ollama_ready),
               "embed_model": _check(lambda: config.EMBED_MODEL)}  # fmt: skip
     status = "ok" if all(c["ok"] for c in checks.values()) else "degraded"
-    return {"status": status, "backend": "pixeltable", "checks": checks}
+    return {"status": status, "backend": "pixeltable", "checks": checks,
+            "enrichment_profile": config.ENRICHMENT_PROFILE}
 
 
 def _check(fn) -> dict:

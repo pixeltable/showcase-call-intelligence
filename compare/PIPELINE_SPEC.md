@@ -1,5 +1,7 @@
 # Pipeline specification
 
+This specification describes the **full comparison** profile. The first lesson runs the same backend with `PXT_ENRICHMENT_PROFILE=core` in a separate catalog: ASR, summary, segment indexing, and comments remain; action items, category, sentiment, and QA are not requested and are null. API responses identify the enrichment profile, and the core sentiment KPI is null. Profiles declare different column kinds and must not be applied interchangeably to an existing catalog.
+
 Both backends implement this contract. The gates in `scripts/compare_parity.py` and `scripts/compare_mutations.py` compare API responses, not storage.
 
 ## Fixtures

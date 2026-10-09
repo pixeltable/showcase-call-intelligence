@@ -1,6 +1,6 @@
 # Call-intelligence showcase review
 
-Reviewed October 8–9, 2026, on the existing `measured-comparison` branch. The checkout was clean before this work. This pass upgrades the Pixeltable backend, fixes defects in both implementations, improves the shared UI, and makes the developer and researcher paths easier to assess. It preserves the comparison structure and the original runtime evidence. No existing call catalog was reset, and no change was committed or pushed.
+Reviewed October 8–9, 2026, on the existing `measured-comparison` branch. The initial checkout was clean. The review upgrades the Pixeltable backend, fixes defects in both implementations, improves the shared UI, and makes the developer and researcher paths easier to assess. The subsequent first-lesson pass builds on commit `bf77374`. The comparison structure and original runtime evidence are preserved. No existing call catalog was reset.
 
 ## Assessment
 
@@ -34,21 +34,31 @@ Schema and service checks used the installed 0.7.15 implementation, not only syn
 
 Existing users should install the frozen lock, export the configured environment before starting Pixeltable, restart the daemon when shared Python transforms change, review the schema diff, apply the schema, and update the service. Existing malformed/defaulted enrichment values are not automatically repaired by changing a parser: inspect the affected rows and explicitly recompute the intended columns. Recomputing model-backed fields invokes those models again.
 
+## First lesson and research follow-through
+
+The primary path now starts one Pixeltable backend and UI, with Ollama as its only Docker service. It uses a dedicated `data/lesson/` catalog and one committed six-second audio fixture. Repeated seeding reuses the saved call rather than resetting stores or uploading a duplicate. The full comparison remains optional and always selects the original full enrichment profile.
+
+The core profile requests only the summary model call; category, action items, sentiment, and QA remain null. Health, roster, and detail responses identify the profile, and the core sentiment KPI is null. This removes actual optional provider work and avoids presenting omitted assessments as scores. The UI leads with summary/evidence, keeps demo metadata editable under a disclosure, and demotes uncalibrated optional assessments. Core and full declare different column kinds; their launchers use separate catalogs rather than attempting an in-place profile migration.
+
+[`examples/extend_call.py`](../examples/extend_call.py) adds a small business-rule column to stored transcript data, changes its expression without immediate recomputation, then recomputes that field explicitly. It checks that transcript, summary, segments, and a probe comment anchor are preserved, and removes its own temporary field/comment afterwards. The CLI is confined to the lesson home. The integration tests execute the same helper on isolated production tables and confirm zero additional ASR, chat, or embedding calls.
+
+A further research defect was identified in `bench_evolve.py`: partial or failed invocations could retain old successful sections while replacing their global timestamp/model. Each invocation now reserves a unique report under `compare/reports/evolve/`, captures source/environment/model/fixture/patch provenance, and records status/timestamps per attempted experiment. Failure and interruption carry explicit errors; existing output paths are refused before setup or experiment work. Historical `compare/results/evolve.json` is never loaded, merged, or overwritten by the harness. Promotion to published results remains a deliberate review step.
+
 ## Verified in this pass
 
-The final focused run passed 81 tests across the four suites below. Both FastAPI test suites emit the installed Starlette adapter's `httpx` deprecation warning; no test failed. The review-owned service and daemon were stopped after the live checks.
+The final focused run passed 97 test executions across the suites/profiles below; the full-profile run skips the core-only case intentionally. Both FastAPI test suites emit the installed Starlette adapter's `httpx` deprecation warning. The review-owned service and daemon were stopped after the original live checks.
 
 | Check | Result and boundary |
 |---|---|
 | Shared transforms, model-response validation, fixture metadata, and vertical profiles | 47 tests passed. Pure Python checks; no external providers. |
-| Pixeltable integration | 16 tests passed using a temporary real catalog, tables, computed columns, iterator view, vector index, and FastAPI routes. ASR, LLM, and embeddings were deterministic substitutes. |
+| Pixeltable integration | 17 full-profile tests and 2 core-profile tests passed using temporary real catalogs, tables, computed columns, iterator views, vector indexes, and FastAPI routes. ASR, LLM, and embeddings were deterministic substitutes. The full run intentionally skips the core-only case. |
 | Media processing | The integration suite generated a real audio/video container and executed Pixeltable's built-in MP3 extraction. It verified playback response types, comments, current-row deletion, view/index cascades, and upload cleanup. |
 | Failure paths | Malformed LLM output produces a failed call while preserving the transcript. An injected embedding failure preserves call transforms, records public SDK operation diagnostics, returns 503 when query embedding also fails, and omits missing vectors when query embedding recovers. Silence makes no LLM calls. |
 | Reference request contract | 7 tests passed with a substituted database dependency: input rejection, semantic failure reporting, flagged filtering beyond the old prefix, and audio response type. This is not a live Celery/Postgres processing run. |
-| Comparison harness | 11 tests passed, including cache-reset failure/timeout and source-fingerprint regressions. All five evolution patches pass read-only applicability checks against the reviewed checkout; the Reference topics patch context was refreshed after category validation changed. |
+| Comparison and lesson harness | 24 tests passed, including cache reset, source fingerprint, immutable evolution reports, collision/failure/interruption, lesson service isolation, one-fixture upload, and repeat-seed behavior. Launcher commands and HTTP providers were substituted; this does not claim a live Docker/model lesson run. All five evolution patches pass read-only applicability checks; contexts were refreshed for category validation and the explicit full-profile branch. |
 | Source quality and generated evidence | Lint, whitespace checks, refreshed source metrics, and regenerated document/chart checks passed. Latency/evolution JSON was retained, not remeasured. |
-| Real Pixeltable serving | `pxt schema check`, `pxt service check`, schema application, schema agreement, service startup, and empty-state HTTP checks passed on the production declarations in an isolated catalog. No model-backed upload was sent to that service. |
-| Shared frontend | Production build and lint passed. Desktop and approximately 500-pixel browser views were checked with synthetic API data. Recording selection, Space-key transcript selection, comment anchoring, long Unicode text, labeled inputs, and media error states were exercised. The browser clamped a requested narrower viewport; this is not a claim of full device coverage or a real provider run. |
+| Real Pixeltable serving | The initial full-profile review passed schema/service checks, schema application/agreement, service startup, and empty-state HTTP checks in an isolated catalog. Core schema/service declaration checks also passed in a new temporary home, whose daemon was stopped afterwards. No model-backed upload was sent to either service. |
+| Shared frontend | Production build and lint passed. Synthetic core/full/failed views were checked on desktop and approximately 500-pixel browser views. Core hides omitted assessments; unavailable results stay explicit, the narrow layout leads with summary before playback, and collapsed required metadata expands/focuses invalid Agent ID input. The earlier pass also exercised recording selection, Space-key transcript selection, comment anchoring, long Unicode text, labeled inputs, and media error states. The browser clamped a requested narrower viewport; this is not a claim of full device coverage or a real provider run. |
 
 CI now uses frozen locks, runs Reference contract tests, and runs Pixeltable schema/integration smoke checks on relevant pull requests as well as the existing schedule. The GitHub-hosted workflows themselves were not executed from this local review.
 

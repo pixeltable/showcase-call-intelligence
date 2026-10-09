@@ -14,6 +14,9 @@ WHISPERX_DIARIZATION_MODEL = os.getenv("WHISPERX_DIARIZATION_MODEL", "pyannote/s
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "all-mpnet-base-v2")
+ENRICHMENT_PROFILE = os.getenv("PXT_ENRICHMENT_PROFILE", "full")
+if ENRICHMENT_PROFILE not in {"core", "full"}:
+    raise ValueError("PXT_ENRICHMENT_PROFILE must be core or full")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 UPLOAD_DIR = Path(os.getenv("PXT_UPLOAD_DIR", str(_REPO / "data" / "pixeltable" / "uploads"))).resolve()
 # Media the API may serve: uploads, and the files Pixeltable computes (always $PIXELTABLE_HOME/media).

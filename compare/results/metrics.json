@@ -2,11 +2,11 @@
   "backends": {
     "pixeltable": {
       "app_files": 3,
-      "app_loc": 442,
+      "app_loc": 459,
       "by_concern": {
-        "Queries and HTTP": 258,
-        "Schema and pipeline": 173,
-        "Settings (config.py)": 11
+        "Queries and HTTP": 266,
+        "Schema and pipeline": 179,
+        "Settings (config.py)": 14
       },
       "classified": {
         "intermediate_progress_visible": false,
@@ -20,8 +20,8 @@
       },
       "config_loc": 20,
       "file_breakdown": {
-        "backends/pixeltable/app.py": 343,
-        "backends/pixeltable/config.py": 11,
+        "backends/pixeltable/app.py": 357,
+        "backends/pixeltable/config.py": 14,
         "backends/pixeltable/functions.py": 88
       },
       "migrations": null,
@@ -115,11 +115,11 @@
   },
   "shared": {
     "app_files": 5,
-    "app_loc": 691,
+    "app_loc": 694,
     "file_breakdown": {
       "shared/call_center_api/constants.py": 5,
       "shared/call_center_api/enrichment.py": 235,
-      "shared/call_center_api/schemas.py": 98,
+      "shared/call_center_api/schemas.py": 101,
       "shared/call_center_api/segmentation.py": 88,
       "shared/call_center_api/verticals.py": 265
     }

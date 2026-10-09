@@ -8,6 +8,7 @@ is created before Pixeltable is imported. Only the external model functions are 
 
 import json
 import os
+import sys
 import time
 import uuid
 import wave
@@ -33,11 +34,15 @@ from call_center_api.schemas import CallDetail, CallSummary, CommentOut, SearchH
 _malformed_output = False
 _chat_calls = 0
 _embedding_failure = False
+_asr_calls = 0
+_embedding_calls = 0
 
 
 @pxt.udf
 def fixture_transcribe(audio: pxt.Audio, *, model: str, diarize: bool, num_speakers: int,
                        diarization_model_name: str) -> dict:
+    global _asr_calls
+    _asr_calls += 1
     with av.open(audio) as container:
         spoken = any(np.any(frame.to_ndarray()) for frame in container.decode(audio=0))
     return {"segments": [
@@ -68,6 +73,8 @@ def fixture_chat(messages: list[dict], *, model: str, format: str | None = None)
 
 @pxt.udf
 def fixture_embedding(text: str, *, model_id: str, normalize_embeddings: bool) -> pxt.Array[(768,), pxt.Float]:
+    global _embedding_calls
+    _embedding_calls += 1
     if _embedding_failure:
         raise RuntimeError("Fixture embedding provider is unavailable")
     vector = np.zeros(768, dtype=np.float32)
@@ -135,9 +142,12 @@ def test_empty_catalog_kpis_have_a_valid_response(api) -> None:
 
 def test_upload_pipeline_search_comments_and_delete(api) -> None:
     client, app = api
+    before_chat = _chat_calls
     call_id = upload(client, audio_file("spoken.wav", spoken=True))
     call = completed(client, call_id)
     assert call["status"] == "completed", call["error_message"]
+    assert call["enrichment_profile"] == "full"
+    assert _chat_calls - before_chat == 5
     assert len(call["segments"]) == 2
     assert all(uuid.UUID(segment["id"]) for segment in call["segments"])
     roster = client.get("/api/calls", params={"limit": 1, "sentiment_label": "negative"}).json()["rows"]
@@ -161,6 +171,55 @@ def test_upload_pipeline_search_comments_and_delete(api) -> None:
     assert app.TranscriptSegments.where(app.TranscriptSegments.id == uuid.UUID(call_id)).count() == 0
     assert app.CoachingComments.where(app.CoachingComments.call_id == uuid.UUID(call_id)).count() == 0
     assert not list(app.config.UPLOAD_DIR.glob(f"{call_id}.*"))
+
+
+@pytest.mark.skipif(os.getenv("PXT_ENRICHMENT_PROFILE") != "core", reason="run separately with the core schema")
+def test_core_profile_skips_optional_model_calls_and_exposes_omission(api, monkeypatch) -> None:
+    client, app = api
+    monkeypatch.setattr(app, "_ollama_ready", lambda: None)
+    assert client.get("/api/health").json()["enrichment_profile"] == "core"
+    assert client.get("/api/calls/kpis").json()["avg_sentiment_score"] is None
+    before = _chat_calls
+    call_id = upload(client, audio_file("core.wav", spoken=True))
+    call = completed(client, call_id)
+    assert call["status"] == "completed", call["error_message"]
+    assert call["enrichment_profile"] == "core"
+    assert _chat_calls - before == 1
+    assert call["summary"] and call["segments"]
+    for field in ("action_items", "sentiment", "qa_scorecard", "category"):
+        assert call[field] is None
+    roster = client.get("/api/calls").json()["rows"]
+    assert roster[0]["enrichment_profile"] == "core"
+    assert roster[0]["sentiment_score"] is None
+    assert client.get("/api/calls/flagged").json()["rows"] == []
+    assert client.get("/api/search", params={"q": "billing", "mode": "semantic"}).json()
+    client.delete(f"/api/calls/{call_id}")
+    before = _chat_calls
+    silent_id = upload(client, audio_file("core-silence.wav", spoken=False))
+    silent = completed(client, silent_id)
+    assert silent["summary"] == "" and silent["segments"] == []
+    assert silent["sentiment"] is None
+    assert _chat_calls == before
+    client.delete(f"/api/calls/{silent_id}")
+
+
+def test_extension_recomputes_only_its_field_and_preserves_evidence(api):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+    from extend_call import FIELD, exercise
+    client, app = api
+    call_id = upload(client, audio_file("extension.wav", spoken=True))
+    completed(client, call_id)
+    before_calls = (_chat_calls, _asr_calls, _embedding_calls)
+    call_uuid = uuid.UUID(call_id)
+    calls, comments = app.Calls.table, app.CoachingComments.table
+    result = exercise(calls, comments, call_uuid)
+    assert result["after_recompute"] is True
+    assert result["transcript_summary_segments_unchanged"] is True
+    assert result["comment_still_anchored"] is True
+    assert before_calls == (_chat_calls, _asr_calls, _embedding_calls)
+    assert FIELD not in calls.columns()
+    assert comments.where(comments.call_id == call_uuid).count() == 0
+    client.delete(f"/api/calls/{call_id}")
 
 
 def test_silence_skips_model_calls(api) -> None:

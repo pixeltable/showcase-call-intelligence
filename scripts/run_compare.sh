@@ -27,6 +27,7 @@ export PIXELTABLE_HOME="$ROOT/data/pixeltable" PXT_UPLOAD_DIR="$ROOT/data/pixelt
 export UPLOAD_DIR="$ROOT/data/reference/uploads" PIXELTABLE_TIME_ZONE="${PIXELTABLE_TIME_ZONE:-UTC}"
 # A daemon port of this repo's own: pxt replaces a daemon that serves another project on its port.
 export PXT_PORT="${PXT_PORT:-22090}"
+export PXT_ENRICHMENT_PROFILE=full
 mkdir -p "$PIXELTABLE_HOME" "$PXT_UPLOAD_DIR" "$UPLOAD_DIR"
 
 PXT_DIR="$ROOT/backends/pixeltable"

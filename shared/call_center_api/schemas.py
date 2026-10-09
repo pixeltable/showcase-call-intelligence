@@ -42,6 +42,7 @@ class CommentCreate(BaseModel):
 
 
 class CallSummary(BaseModel):
+    enrichment_profile: Literal["core", "full"] = "full"
     id: uuid.UUID
     call_date: datetime
     agent_id: str
@@ -62,6 +63,7 @@ class CallSummary(BaseModel):
 
 
 class CallDetail(BaseModel):
+    enrichment_profile: Literal["core", "full"] = "full"
     id: uuid.UUID
     audio_path: str
     original_filename: str
@@ -90,7 +92,7 @@ class CallDetail(BaseModel):
 class KpiResponse(BaseModel):
     call_count: int
     avg_handle_time_sec: float
-    avg_sentiment_score: float
+    avg_sentiment_score: float | None
 
 
 class SearchHit(BaseModel):
@@ -119,6 +121,7 @@ class HealthCheckResult(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    enrichment_profile: Literal["core", "full"] = "full"
     status: Literal["ok", "degraded"]
     backend: Literal["reference", "pixeltable"]
     checks: dict[str, HealthCheckResult]

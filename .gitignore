@@ -13,6 +13,7 @@ backends/reference/uploads/
 .compare-pids/
 .compare-state.json
 compare/reports/*.json
+compare/reports/evolve/
 
 # Downloaded compare video fixtures (scripts/fetch_fixtures.py).
 # podcast-excerpt-audio.wav is a derived excerpt and is committed.

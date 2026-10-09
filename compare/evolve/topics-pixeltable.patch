@@ -2,10 +2,10 @@ diff --git a/backends/pixeltable/app.py b/backends/pixeltable/app.py
 --- a/backends/pixeltable/app.py
 +++ b/backends/pixeltable/app.py
 @@ -83,6 +83,7 @@
-         transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
-     )
-     qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
-+    topics = f.parse_topics_content(transcript, ollama(f.chat_messages(vertical, transcript, "topics")))
+             transcript, ollama(f.chat_messages(vertical, transcript, "category"), json=False)
+         )
+         qa_scorecard = f.parse_qa_content(transcript, ollama(f.chat_messages(vertical, transcript, "qa")))
++        topics = f.parse_topics_content(transcript, ollama(f.chat_messages(vertical, transcript, "topics")))
  
  
  class TranscriptSegments(

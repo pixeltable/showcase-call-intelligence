@@ -47,8 +47,18 @@ export function UploadForm({ onUploaded }: Props) {
   }
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <h2 className="text-lg font-semibold">{labels.uploadTitle}</h2>
+    <form ref={formRef} onSubmit={onSubmit} onInvalidCapture={(event) => {
+      const metadata = formRef.current?.querySelector("details");
+      if (metadata && event.target instanceof Node && metadata.contains(event.target)) metadata.open = true;
+    }} className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+      <h2 className="text-lg font-semibold">Upload a recording</h2>
+      <label className="block text-sm">
+        Recording (audio or video)
+        <input type="file" name="audio" accept={ACCEPT} required className="mt-2 block w-full text-sm" />
+      </label>
+      <p className="text-sm text-slate-400">Uses demo participant IDs and a demo queue. Edit the metadata below to organize your own recordings.</p>
+      <details className="space-y-3">
+        <summary className="cursor-pointer text-sm text-slate-300">Recording metadata and other use cases</summary>
       <label className="block text-sm">
         Use case
         <select
@@ -66,10 +76,6 @@ export function UploadForm({ onUploaded }: Props) {
       </label>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="block text-sm">
-          Recording (audio or video)
-          <input type="file" name="audio" accept={ACCEPT} required className="mt-1 block w-full text-sm" />
-        </label>
-        <label className="block text-sm">
           Recording date
           <input
             type="datetime-local"
@@ -81,17 +87,18 @@ export function UploadForm({ onUploaded }: Props) {
         </label>
         <label className="block text-sm">
           {labels.agentId}
-          <input name="agent_id" required maxLength={128} placeholder="agent-101" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
+          <input name="agent_id" required maxLength={128} defaultValue="demo-agent" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
         </label>
         <label className="block text-sm">
           {labels.customerId}
-          <input name="customer_id" required maxLength={128} placeholder="cust-4821" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
+          <input name="customer_id" required maxLength={128} defaultValue="demo-customer" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
         </label>
         <label className="block text-sm md:col-span-2">
           {labels.queue}
-          <input name="queue" required maxLength={128} placeholder="billing" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
+          <input name="queue" required maxLength={128} defaultValue="demo-queue" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
         </label>
       </div>
+      </details>
       <button
         type="submit"
         disabled={mutation.isPending}

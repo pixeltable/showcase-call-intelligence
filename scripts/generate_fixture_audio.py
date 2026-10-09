@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -66,7 +65,7 @@ FIXTURE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
 
 def _require_tools() -> None:
     if shutil.which("say") is None:
-        raise RuntimeError("macOS 'say' command not found — generate on Darwin or commit pre-built WAVs.")
+        raise RuntimeError("macOS 'say' command not found. Generate on Darwin or commit pre-built WAVs.")
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not found on PATH.")
 

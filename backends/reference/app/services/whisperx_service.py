@@ -1,4 +1,4 @@
-"""WhisperX transcription and diarization — matches Pixeltable built-in UDF params."""
+"""WhisperX transcription and diarization, with the parameters of Pixeltable's built-in UDF."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _lookup_diarization_model(device: str, model_name: str | None) -> Any:
 
 
 def transcribe_diarize(audio_path: str) -> dict[str, Any]:
-    """Run WhisperX with diarization — same steps as pixeltable.functions.whisperx.transcribe."""
+    """Run WhisperX with diarization: the same steps as pixeltable.functions.whisperx.transcribe."""
     import whisperx
 
     device, compute_type = _device_and_compute()

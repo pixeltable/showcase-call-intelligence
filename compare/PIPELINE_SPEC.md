@@ -1,188 +1,87 @@
-# Pipeline specification (both backends)
+# Pipeline specification
 
-Both backends implement this contract independently. Parity tests compare API JSON, not internal storage.
+Both backends implement this contract. The gates in `scripts/compare_parity.py` and `scripts/compare_mutations.py` compare API responses, not storage.
 
-Compare fixtures (10 entries: 6 audio + 4 video) are defined in [`fixtures/manifest.json`](fixtures/manifest.json). Each vertical (`call_center`, `sales`, `podcast`, `interview`) has at least one audio and one video fixture. Video files are fetched via [`scripts/fetch_fixtures.py`](../scripts/fetch_fixtures.py); derived copies/extracts via [`scripts/prepare_fixture_media.py`](../scripts/prepare_fixture_media.py); synthetic WAVs via [`scripts/generate_fixture_audio.py`](../scripts/generate_fixture_audio.py). See [`fixtures/ATTRIBUTION.md`](fixtures/ATTRIBUTION.md).
+## Fixtures
 
-| Vertical | Audio fixtures | Video fixtures |
-|----------|----------------|----------------|
-| call_center | billing-inquiry, cancellation-request | pursuit-happiness |
-| sales | sales-discovery | sales-demo (copy) |
-| podcast | podcast-excerpt (extract) | lex-fridman, travel-briefing |
+Ten recordings in [`fixtures/manifest.json`](fixtures/manifest.json), five audio and five video, covering the four verticals. Committed WAVs are synthetic or extracted; videos are fetched by [`scripts/fetch_fixtures.py`](../scripts/fetch_fixtures.py) and derived by [`scripts/prepare_fixture_media.py`](../scripts/prepare_fixture_media.py). Attribution: [`fixtures/ATTRIBUTION.md`](fixtures/ATTRIBUTION.md). The seed shifts the manifest's dates so the newest call lands one hour before the seed runs, which keeps every seeded call inside the 7-day KPI window.
+
+| Vertical | Audio | Video |
+|---|---|---|
+| call_center | billing-inquiry-speech, cancellation-request | pursuit-happiness-video |
+| sales | sales-discovery | sales-demo-video (copy) |
+| podcast | podcast-excerpt-audio (extract) | lex-fridman-excerpt, travel-briefing |
 | interview | interview-behavioral | interview-session (copy) |
 
-## Environment
+## Models (identical on both)
 
-| Variable | Default | Used by |
-|----------|---------|---------|
-| `WHISPERX_MODEL` | `base` | WhisperX ASR |
-| `WHISPERX_DIARIZATION_MODEL` | `pyannote/speaker-diarization-3.1` | WhisperX diarization |
-| `HF_TOKEN` | (required for diarization) | Hugging Face / pyannote |
-| `OLLAMA_MODEL` | `llama3.1` | Enrichment chat (Ollama) |
-| `EMBED_MODEL` | `all-mpnet-base-v2` | Segment embeddings (Hugging Face Sentence Transformers) |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama client (chat only) |
+| Variable | Default | Used for |
+|---|---|---|
+| `WHISPERX_MODEL` | `base` | ASR, CPU, `int8`, batch 16 |
+| `WHISPERX_DIARIZATION_MODEL` | `pyannote/speaker-diarization-3.1` | diarization, `num_speakers=2` (needs `HF_TOKEN`) |
+| `OLLAMA_MODEL` | `llama3.1` | the five enrichments, through one Ollama server |
+| `EMBED_MODEL` | `all-mpnet-base-v2` | 768-dim segment embeddings, normalized |
 
-WhisperX transcribe parameters (both backends):
-
-- `diarize=True`
-- `num_speakers=2`
-- `diarization_model_name=$WHISPERX_DIARIZATION_MODEL`
+The Reference's [`whisperx_service.py`](../backends/reference/app/services/whisperx_service.py) runs the same steps as Pixeltable's `whisperx.transcribe` UDF: load, transcribe, align, diarize, assign speakers.
 
 ## Ingest
 
-- Accept audio (`.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, `.webm`) and video (`.mp4`, `.mov`, `.mkv`).
-- **Audio path:** store uploaded audio; transcribe directly.
-- **Video path:** extract audio as **MP3** (Pixeltable: `extract_audio(video, format="mp3")`; reference: ffmpeg equivalent), then transcribe extracted audio.
+- Audio: `.wav .mp3 .m4a .ogg .flac .webm`. Video: `.mp4 .mov .mkv`. Anything else is a 400. Uploads over `MAX_UPLOAD_MB` are a 400.
+- `POST /api/calls/upload` returns `202 {id, status}` before any processing.
+- Video: extract MP3 audio (Pixeltable: the `extracted_audio` computed column; Reference: ffmpeg in the Celery task), then transcribe it.
 
-## Transcribe
+## Segments and transcript
 
-One WhisperX call per call on `audio ?? extracted_audio`.
-
-## Segment extraction
-
-From WhisperX `diarized["segments"]`:
-
-1. Build speaker map: first distinct raw speaker → `AGENT`, second → `CUSTOMER`.
-2. If only one raw speaker: infer from regex (`AGENT` greeting patterns, `CUSTOMER` speech patterns), else alternate by index.
-3. Drop segments with empty text.
-4. Output rows: `{speaker, start_sec, end_sec, text}` with `speaker` in `{AGENT, CUSTOMER}`.
-
-## LLM transcript format
+From WhisperX `segments`: the first distinct speaker is `AGENT`, the second `CUSTOMER`; with one speaker, a regex on greeting and complaint phrases decides, else the index alternates. Empty segments are dropped. Shared code: [`segmentation.py`](../shared/call_center_api/segmentation.py). The LLM sees one line per segment:
 
 ```
 [{start:.1f}s-{end:.1f}s] {SPEAKER}: {text}
 ```
 
-One line per segment, joined with `\n`.
+## Enrichment
 
-## LLM prompts (system messages)
+Five Ollama chat calls per call, system prompt from `get_profile(vertical).prompts` ([`verticals.py`](../shared/call_center_api/verticals.py)), parsed by [`enrichment.py`](../shared/call_center_api/enrichment.py). Both backends make the five calls one after another: the Reference loops in `OllamaClient.enrich_call`; Pixeltable's `ollama.chat` is a synchronous UDF, and its engine runs synchronous UDFs one at a time.
 
-Canonical prompt text and response parsers live in [`shared/call_center_api/enrichment.py`](../shared/call_center_api/enrichment.py) and [`shared/call_center_api/verticals.py`](../shared/call_center_api/verticals.py). Both backends import from those modules.
+| Field | JSON mode | Output |
+|---|---|---|
+| summary | yes | `{"bullets": [...]}`, stored as newline-joined lines |
+| action_items | yes | array of strings |
+| sentiment | yes | `{label, score, rationale, moments[]}`; a moment is `{start_sec, end_sec?, polarity, reason}` |
+| category | no | one label |
+| qa_scorecard | yes | `{empathy, resolution, compliance, overall, notes}`, scores clamped to 0-10 |
 
-Upload accepts optional `vertical` (`call_center` | `sales` | `podcast` | `interview`; default `call_center`). Enrichment system prompts are selected via `get_profile(vertical).prompts`; output JSON shapes and parsers are unchanged across verticals.
-
-| Field | JSON mode | Output shape |
-|-------|-----------|--------------|
-| Summary | yes | `{"bullets": ["...", ...]}` → stored as newline-joined plain strings |
-| Action items | yes | JSON array of strings (agent commitments, follow-ups) |
-| Sentiment | yes | `{label, score, rationale, moments[]}` — each moment: `{start_sec, end_sec?, polarity, reason}` |
-| Category | no | Single category label string |
-| QA scorecard | yes | `{empathy, resolution, compliance, overall, notes}` |
-
-Post-processing (shared parsers): extract JSON from fenced/prose wrappers, strip markdown preambles from summaries, clamp QA scores to 0–10, validate sentiment labels, normalize `moments` with polarity (`positive|neutral|negative`). Legacy `flags` arrays are read as negative moments for backward compatibility.
-
-### Sentiment moments (waveform)
-
-- **Call-level:** `label`, `score`, `rationale` — overall QA assessment.
-- **Time-aligned:** `moments[]` with `polarity`, `start_sec`, optional `end_sec`, and `reason`.
-- **UI:** waveform regions color-coded (negative=red, neutral=amber, positive=green); sidebar lists all moments.
-- **Flagged calls API:** still driven by negative label, low score, or negative-polarity moments (not positive highlights).
-
-## Empty transcript
-
-When transcript text is empty after segment extraction, both backends expose the same **typed defaults**:
+**No speech:** neither backend calls the LLM. The Reference checks the transcript in Python. On Pixeltable the transcript is null, and a null argument to a non-nullable UDF parameter skips the call, so all five cells skip. Both store the same defaults:
 
 | Field | Value |
-|-------|-------|
-| `summary` | `""` |
-| `action_items` | `[]` |
-| `sentiment` | `{"label":"unknown","score":0.5,"rationale":"","moments":[]}` |
-| `category` | `"Uncategorized"` |
-| `qa_scorecard` | `{"empathy":0,"resolution":0,"compliance":0,"overall":0,"notes":""}` |
-| `handle_time_sec` | `0.0` |
+|---|---|
+| summary | `""` |
+| action_items | `[]` |
+| sentiment | `{"label": "unknown", "score": 0.5, "rationale": "", "moments": []}` |
+| category | `"Uncategorized"` |
+| qa_scorecard | zeros, `notes: ""` |
+| handle_time_sec | `0.0` |
 
-**How they get there (intentional diff):**
+## Status
 
-- **Reference:** skips all Ollama HTTP calls and writes defaults directly.
-- **Pixeltable:** native `ollama.chat` columns still fire; `parse_*_content` returns the defaults above when transcript is empty.
+| Backend | What a client sees while a call is processed |
+|---|---|
+| Reference | `queued`, `transcribing`, `diarizing`, `enriching`, `embedding`, then `completed` or `failed`. The Celery task commits each stage, and the roster lists the call from the start. |
+| Pixeltable | `processing`, then `completed` or `failed`. A row commits only when every computed column, its segment rows and their embeddings are done, so there is no stage to report and the roster lists the call once it is done. The detail route answers `processing` from the upload it accepted. |
 
-## Status machine
+`failed` on Pixeltable means a cell holds an error (`errormsg`); a failed cell also fails every column computed from it, and the other cells keep their values. On the Reference, `failed` means the task raised; stages already committed stay.
 
-API `status` values: `queued` → `transcribing` → `diarizing` → `enriching` → `embedding` → `completed` (or `failed` on error).
+## Embeddings and search
 
-- **Reference:** Celery task updates `Call.status` through each stage.
-- **Pixeltable:** `pipeline_status` computed column derived from column completion.
-- **Zero segments is OK:** pipeline completes after enrichment defaults; status must reach `completed`.
+One vector per segment. Reference: `SentenceTransformer.encode` into a `vector(768)` column with an HNSW index, and the query is embedded by hand. Pixeltable: `EmbeddingIndex(text, embedding=sentence_transformer.using(...))` on the `transcript_segments` view, maintained on insert and delete; `similarity(string=q)` embeds the query with the same model.
 
-## Embeddings
+`GET /api/search?q&mode=keyword|semantic|hybrid&limit`: keyword hits (case-insensitive substring, newest first, `score` 1.0) then semantic hits not already returned (`score` is cosine similarity), from calls that completed without errors.
 
-- Model: `all-mpnet-base-v2` (Hugging Face Sentence Transformers, 768-dim)
-- One vector per segment `text`
-- Ollama is used for **chat/enrichment only**, not embeddings
+## Media
 
-| Backend | Implementation | Semantic query |
-|---------|----------------|----------------|
-| **Reference** | `SentenceTransformer.encode()` in [`embed_service.py`](../backends/reference/app/services/embed_service.py) → pgvector HNSW | SQL `cosine_distance` |
-| **Pixeltable** | Native `sentence_transformer.using(model_id=EMBED_MODEL, normalize_embeddings=True)` on `transcript_segments` embedding index | `segments.text.similarity(string=query)` |
+`GET /api/calls/{id}/audio` streams the audio that was transcribed (the extracted MP3 for a video). `GET /api/calls/{id}/video` streams the original video.
 
-Reference does **not** use Pixeltable. Pixeltable enrichment uses built-in `pixeltable.functions.ollama.chat` as five independent `*_raw` computed columns on the `Calls` `TableModel` in [`schema.py`](../backends/pixeltable/schema.py) (Pixeltable 0.7.8 class-based schema), with system prompts from `functions.vertical_prompt` and typed columns via `parse_*_content` UDFs. Accessor: `chat(...)['message']['content']`.
+## Comments and delete
 
-### Pixeltable provider rules
+`POST /api/comments {call_id, segment_id?, start_sec, author, comment}`: 404 for an unknown call, 400 for a segment that is not the call's, 422 for a segment id that is not a UUID. Segment ids are UUIDs: generated by the database on the Reference, UUIDv5 of the call id and position on Pixeltable.
 
-**Ollama (chat / enrichment)** — use `ollama.chat` as top-level computed columns only (never inside a custom `@pxt.udf`). Vertical prompts come from `vertical_prompt(vertical, field)`. Empty transcripts still invoke `chat` (no expression short-circuit); parsers return typed defaults. Reference skips HTTP on empty transcript — intentional diff.
-
-**Hugging Face embeddings** — use `sentence_transformer.using(model_id=..., normalize_embeddings=True)` on the `TableModel` embedding index. Default `normalize_embeddings` is `False`; both backends normalize so `score` stays comparable. Pin `sentence-transformers>=5.4,<6` (ST 6 wants `huggingface-hub>=1.3`; WhisperX 3.8.6 wants `<1.0`). ST 5.4 guards torchcodec import; a torchcodec vs ffmpeg 8 (`libavutil.60`) mismatch can still break **pyannote/WhisperX** — confirm `diarized` materializes before blaming Ollama.
-
-Custom UDFs in [`functions.py`](../backends/pixeltable/functions.py) also parse/transform (e.g. `parse_summary_content`) and derive `pipeline_status`.
-
-### Embed readiness (Pixeltable)
-
-Seed and compare wait helpers poll `GET /api/calls/{uuid}/embed-ready` until the `transcript_segments` view has materialized rows for the call (aligned with Reference gating `completed` on embed). Implemented in [`routers/native.py`](../backends/pixeltable/routers/native.py); used by [`scripts/lib/pxt_api.py`](../scripts/lib/pxt_api.py).
-
-### Index maintenance
-
-| Event | Pixeltable | Reference |
-|-------|------------|-----------|
-| New segments | Embedding index auto-computes on view materialization | `embed_segments()` in Celery `process_call` |
-| Failed embed | Index skips until column value exists | Sets `embedding = NULL`; triggers `reembed_call` task |
-| Call delete | Index entries pruned with parent row | `ON DELETE CASCADE` on segments; HNSW index follows row deletes |
-| Backfill | N/A (declarative) | Celery `backfill_embeddings` task; dev admin `POST /api/admin/backfill-embeddings` when `ENABLE_ADMIN_ENDPOINTS=true` |
-
-Reference dev repair: `POST /api/admin/reembed/{call_id}` re-queues embedding for segments with NULL vectors.
-
-## Search API
-
-`GET /api/search` returns enriched `SearchHit` objects:
-
-- `segment_pos` — utterance index (lineage key)
-- `match_type` — `keyword` or `semantic`
-- `media_type` — `audio` or `video` (from parent call)
-- `original_filename` — source upload name
-- `vertical` — use case profile (`call_center`, `sales`, `podcast`, `interview`; default `call_center`)
-
-Pixeltable resolves parent call fields via view lineage (no JOIN). Reference resolves via SQL JOIN.
-
-Media endpoints:
-
-- `GET /api/calls/{id}/audio` — transcribe/playable audio (extracted MP3 for video calls)
-- `GET /api/calls/{id}/video` — original video file when `media_type=video`
-
-## Retrieval
-
-HTTP responses use [`shared/call_center_api/schemas.py`](../shared/call_center_api/schemas.py). Segment `speaker` values are `AGENT` / `CUSTOMER` in API output.
-
-## Mutation lifecycle
-
-Detail-page mutations (coaching comments, call delete) are verified by `scripts/compare_mutations.py`. Tests use **ephemeral uploads** so seeded fixture IDs in `.compare-state.json` stay intact.
-
-### Coaching comment create (`POST /api/comments`)
-
-| Concern | Pixeltable | Reference |
-|---------|------------|-----------|
-| Storage | Insert into `coaching_comments` table | Insert into `coaching_comments` row |
-| Segment anchor | Resolve `segment_id` → `segment_pos` (`backends/pixeltable/routers/comments.py`) | FK `segment_id` optional (`backends/reference/app/routers/comments.py`) |
-| Search / embeddings | **No change** (comments not indexed) | **No change** |
-| Lineage | Standalone table keyed by `call_uuid` | FK to `calls` + optional `transcript_segments` |
-
-### Call delete (`DELETE /api/calls/{id}`)
-
-| Dependency | Pixeltable (declarative) | Reference (explicit) |
-|------------|------------------------|----------------------|
-| Coaching comments | `comments.delete(call_uuid=…)` then `calls.delete` | SQLAlchemy `cascade="all, delete-orphan"` on `Call.comments` |
-| Transcript segments | View `transcript_segments` rows removed when parent call deleted | `ON DELETE CASCADE` on `TranscriptSegment.call_id` |
-| Embedding index | Index on view auto-prunes with segment rows | pgvector HNSW follows row deletes — no separate reindex task |
-| Upload media | Catalog/blob lifecycle via Pixeltable storage | `delete_upload_files()` before ORM delete |
-| Search / KPIs / roster | Deleted call absent from catalog queries | Deleted rows absent from SQL; no cache invalidation |
-| Celery / pipeline | N/A (no worker) | N/A on delete (no task to cancel) |
-
-Reference does **not** need `reembed_call` / `backfill_embeddings` on delete — only on failed embed during ingest.
+`DELETE /api/calls/{id}` removes the call, its segments and their embeddings, its comments, and its upload files; a second delete is a 404. `compare_mutations.py` checks each store directly.

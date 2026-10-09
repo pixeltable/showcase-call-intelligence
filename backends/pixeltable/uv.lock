@@ -2655,7 +2655,7 @@ wheels = [
 
 [[package]]
 name = "pixeltable"
-version = "0.7.8"
+version = "0.7.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -2697,7 +2697,7 @@ dependencies = [
     { name = "tzlocal" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/b7/2280764e0f6f68964827a077850dce2f453da520c7ff1f948381d863e848/pixeltable-0.7.8-py3-none-any.whl", hash = "sha256:4b6a4faf1e634a22e842da15802f768e9117dd1904a8b896b06f750232af4435", size = 1306883, upload-time = "2026-09-16T23:11:05.86Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/6f/b406cf7c9832a2c7142c26036d5d76de65d80ebb0b576e6f6ddfbed1282a/pixeltable-0.7.11-py3-none-any.whl", hash = "sha256:4dbdbd86627ae3af4fb52c0e04d9b27b8e7522f193bf280cd9ea4d614c9bfdfa", size = 1338654, upload-time = "2026-09-26T03:43:21.937Z" },
 ]
 
 [package.optional-dependencies]
@@ -3941,7 +3941,6 @@ dependencies = [
     { name = "httpx" },
     { name = "ollama" },
     { name = "pixeltable", extra = ["serve"] },
-    { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "sentence-transformers" },
     { name = "torch" },
@@ -3955,8 +3954,7 @@ requires-dist = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "ollama" },
-    { name = "pixeltable", extras = ["serve"], specifier = ">=0.7.8,<0.8" },
-    { name = "python-dotenv" },
+    { name = "pixeltable", extras = ["serve"], specifier = ">=0.7.11,<0.8" },
     { name = "python-multipart" },
     { name = "sentence-transformers", specifier = ">=5.4,<6" },
     { name = "torch" },

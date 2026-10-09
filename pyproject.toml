@@ -1,8 +1,26 @@
 [project]
 name = "sample-app-call-intelligence"
 version = "0.4.0"
-description = "Side-by-side call intelligence — Pixeltable TableModel vs Celery/Postgres"
+description = "One call-intelligence product on Pixeltable and on Celery + Postgres, measured side by side"
 requires-python = ">=3.11"
 dependencies = [
     "httpx",
+    "call-center-api",
 ]
+
+[tool.uv.sources]
+call-center-api = { path = "shared", editable = true }
+
+[tool.ruff]
+line-length = 120
+src = ["backends/reference", "backends/pixeltable", "shared", "scripts"]
+extend-exclude = ["frontend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+# E501: long lines are allowed where a formatter would not break them. B008: File()/Form() defaults are FastAPI's idiom.
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# A TableModel class body refers to the columns declared above it; Pixeltable's model namespace resolves them.
+"backends/pixeltable/app.py" = ["F821"]

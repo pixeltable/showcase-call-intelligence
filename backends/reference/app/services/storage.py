@@ -1,10 +1,11 @@
+import shutil
 import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
 
 from app.config import settings
-from app.services.video import extract_audio_from_video, is_video_extension
+from app.services.video import is_video_extension
 from call_center_api.constants import ALLOWED_UPLOAD_EXTENSIONS
 
 
@@ -15,7 +16,10 @@ def get_upload_dir() -> Path:
 
 
 def save_upload(file: UploadFile, call_id: uuid.UUID) -> tuple[str, str, str | None, str]:
-    """Save upload and return (audio_path, original_filename, video_path, media_type)."""
+    """Save upload and return (audio_path, original_filename, video_path, media_type).
+
+    For video, audio_path is where the worker writes the extracted MP3; it does not exist yet.
+    """
     ext = Path(file.filename or "audio.wav").suffix.lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
         raise ValueError(f"Unsupported file type: {ext}")
@@ -29,24 +33,39 @@ def save_upload(file: UploadFile, call_id: uuid.UUID) -> tuple[str, str, str | N
 
     upload_dir = get_upload_dir()
     original_filename = file.filename or f"recording{ext}"
-    payload = file.file.read()
+    dest = upload_dir / f"{call_id}{ext}"
+    with dest.open("wb") as out:
+        shutil.copyfileobj(file.file, out)
 
     if is_video_extension(ext):
-        video_dest = upload_dir / f"{call_id}{ext}"
-        video_dest.write_bytes(payload)
         audio_dest = upload_dir / f"{call_id}.mp3"
-        extract_audio_from_video(video_dest, audio_dest)
-        return str(audio_dest.resolve()), original_filename, str(video_dest.resolve()), "video"
-
-    dest = upload_dir / f"{call_id}{ext}"
-    dest.write_bytes(payload)
+        return str(audio_dest.resolve()), original_filename, str(dest.resolve()), "video"
     return str(dest.resolve()), original_filename, None, "audio"
+
+
+def resolve_upload_file(path_str: str | None) -> Path | None:
+    """Return a file under the upload directory, or None if the path escapes it."""
+    if not path_str:
+        return None
+    root = get_upload_dir().resolve()
+    try:
+        resolved = Path(path_str).resolve()
+    except OSError:
+        return None
+    if not resolved.is_file() or not resolved.is_relative_to(root):
+        return None
+    return resolved
+
+
+def safe_download_name(name: str | None, fallback: str = "download") -> str:
+    """Basename safe for Content-Disposition (no paths or header breaks)."""
+    raw = Path(name or fallback).name
+    cleaned = "".join(ch for ch in raw if ch.isprintable() and ch not in {'"', "\\", "/", "\r", "\n"})
+    return cleaned or Path(fallback).name or "download"
 
 
 def delete_upload_files(audio_path: str, video_path: str | None = None) -> None:
     for path_str in (audio_path, video_path):
-        if not path_str:
-            continue
-        path = Path(path_str)
-        if path.is_file():
+        path = resolve_upload_file(path_str)
+        if path is not None:
             path.unlink()

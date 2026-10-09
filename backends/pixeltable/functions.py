@@ -1,11 +1,10 @@
-"""UDFs for call center transcription and intelligence pipeline.
+"""UDFs the schema in app.py calls. Transform semantics: compare/PIPELINE_SPEC.md."""
 
-Transform semantics are defined in compare/PIPELINE_SPEC.md.
-"""
-
+import uuid
 from typing import TypedDict
 
 import pixeltable as pxt
+
 from call_center_api.constants import FLAGGED_SENTIMENT_THRESHOLD
 from call_center_api.enrichment import (
     EMPTY_QA,
@@ -18,9 +17,9 @@ from call_center_api.enrichment import (
     parse_sentiment,
     parse_summary,
 )
-from call_center_api.segmentation import extract_segments as shared_extract_segments
+from call_center_api.segmentation import extract_segments as label_segments
 from call_center_api.segmentation import flatten_transcript_dicts
-from call_center_api.verticals import DEFAULT_VERTICAL, get_profile
+from call_center_api.verticals import get_profile
 
 
 class SegmentRow(TypedDict):
@@ -32,164 +31,101 @@ class SegmentRow(TypedDict):
 
 @pxt.udf
 def pick_source_audio(audio: pxt.Audio | None, extracted_audio: pxt.Audio | None) -> pxt.Audio | None:
-    """Use uploaded audio when present, otherwise extracted video audio."""
-    if audio is not None and str(audio).strip():
-        return audio
-    if extracted_audio is not None and str(extracted_audio).strip():
-        return extracted_audio
-    return None
+    """The uploaded audio, or the audio extracted from an uploaded video."""
+    return audio if audio is not None else extracted_audio
 
 
 @pxt.udf
 def extract_segments(diarized: dict | None) -> list[SegmentRow]:
-    """Extract WhisperX segments with AGENT/CUSTOMER labels."""
-    labeled = shared_extract_segments(diarized)
+    """WhisperX segments labeled AGENT/CUSTOMER."""
     return [
-        {
-            "speaker": seg.speaker,
-            "start_sec": seg.start_sec,
-            "end_sec": seg.end_sec,
-            "text": seg.text,
-        }
-        for seg in labeled
+        {"speaker": s.speaker, "start_sec": s.start_sec, "end_sec": s.end_sec, "text": s.text}
+        for s in label_segments(diarized)
     ]
 
 
 @pxt.udf
-def flatten_transcript_segments(segments: list | None) -> str:
-    """Flat transcript text for LLM prompts with timestamps."""
-    return flatten_transcript_dicts(segments)
+def flatten_transcript(segments: list | None) -> str | None:
+    """Timestamped transcript for the LLM prompts; None when nothing was said, which skips the LLM calls."""
+    return flatten_transcript_dicts(segments) or None
 
 
 @pxt.udf
-def handle_time_from_segments(segments: list | None) -> float:
-    """Call duration from last segment end time."""
-    if not segments:
-        return 0.0
-    ends = [float(seg.get("end_sec", 0.0)) for seg in segments if isinstance(seg, dict)]
-    return max(ends) if ends else 0.0
+def handle_time(segments: list | None) -> float:
+    ends = [float(s.get("end_sec", 0.0)) for s in segments or [] if isinstance(s, dict)]
+    return max(ends, default=0.0)
 
 
 @pxt.udf
-def vertical_prompt(vertical: str | None, field: str) -> str:
-    """Return vertical-specific LLM system prompt for an enrichment field."""
-    prompts = get_profile(vertical or DEFAULT_VERTICAL).prompts
-    value = getattr(prompts, field, None)
-    if not isinstance(value, str):
-        raise ValueError(f"Unknown prompt field: {field}")
-    return value
+def chat_messages(vertical: str, transcript: str, field: str) -> list[dict]:
+    """System prompt for this vertical and field, then the transcript. A None transcript skips the call."""
+    return [
+        {"role": "system", "content": getattr(get_profile(vertical).prompts, field)},
+        {"role": "user", "content": transcript},
+    ]
 
 
 @pxt.udf
 def parse_summary_content(transcript: str | None, raw: str | None) -> str:
-    if not (transcript or "").strip():
-        return ""
-    return format_summary(parse_summary(raw or ""))
+    return format_summary(parse_summary(raw or "")) if transcript else ""
 
 
 @pxt.udf
 def parse_action_items_content(transcript: str | None, raw: str | None) -> list[str]:
-    if not (transcript or "").strip():
-        return []
-    return parse_action_items(raw or "")
+    return parse_action_items(raw or "") if transcript else []
 
 
 @pxt.udf
 def parse_sentiment_content(transcript: str | None, raw: str | None) -> dict:
-    if not (transcript or "").strip():
-        return dict(EMPTY_SENTIMENT)
-    return parse_sentiment(raw or "")
+    return parse_sentiment(raw or "") if transcript else dict(EMPTY_SENTIMENT)
 
 
 @pxt.udf
 def parse_category_content(transcript: str | None, raw: str | None) -> str:
-    if not (transcript or "").strip():
-        return "Uncategorized"
-    return normalize_category(raw or "")
+    return normalize_category(raw or "") if transcript else "Uncategorized"
 
 
 @pxt.udf
 def parse_qa_content(transcript: str | None, raw: str | None) -> dict:
-    if not (transcript or "").strip():
-        return dict(EMPTY_QA)
-    return parse_qa_scorecard(raw or "")
+    return parse_qa_scorecard(raw or "") if transcript else dict(EMPTY_QA)
 
 
 @pxt.udf
-def is_flagged_sentiment(
-    sentiment: dict | None, threshold: float = FLAGGED_SENTIMENT_THRESHOLD
-) -> bool:
+def is_flagged(sentiment: dict | None, threshold: float = FLAGGED_SENTIMENT_THRESHOLD) -> bool:
     if not isinstance(sentiment, dict):
         return False
-    label = str(sentiment.get("label") or "").lower()
-    score = sentiment.get("score")
+    if str(sentiment.get("label") or "").lower() == "negative":
+        return True
     try:
-        score_f = float(score) if score is not None else None
+        if float(sentiment.get("score")) < threshold:
+            return True
     except (TypeError, ValueError):
-        score_f = None
-    if label == "negative":
-        return True
-    if score_f is not None and score_f < threshold:
-        return True
+        pass
     return has_negative_sentiment_moments(sentiment)
 
 
 @pxt.udf
-def derive_pipeline_status(
-    diarized: dict | None,
-    segments: list | None,
-    summary: str | None,
-    sentiment: dict | None,
-    category: str | None,
-    qa_scorecard: dict | None,
-) -> str:
-    """Derive pipeline status from column completion (no catalog access inside UDF)."""
-    if diarized is None:
-        return "queued"
-    if segments is None:
-        return "transcribing"
-    if summary is None and sentiment is None:
-        return "diarizing"
-    if summary is None or sentiment is None:
-        return "enriching"
-    category_text = (category or "").strip()
-    if not category_text:
-        return "embedding"
-    if not isinstance(qa_scorecard, dict) or not qa_scorecard:
-        return "embedding"
-    return "completed"
+def first_error(errors: list) -> str | None:
+    """The first per-cell error message, in pipeline order."""
+    return next((str(e).strip() for e in errors if e and str(e).strip()), None)
 
 
 @pxt.udf
-def has_video_source(media_type: str | None, video: pxt.Video | None) -> bool:
-    return media_type == "video" and video is not None and str(video).strip() != ""
+def call_status(errors: list) -> str:
+    """A stored row is finished: every column is computed or holds its error."""
+    return "failed" if any(e and str(e).strip() for e in errors) else "completed"
 
 
-def _error_text(value: str | None) -> str:
-    return str(value).strip() if value else ""
+def segment_uuid(call_id: uuid.UUID, pos: int) -> uuid.UUID:
+    """A segment's id: a UUID, as the contract types it, fixed by its call and its position in the view."""
+    return uuid.uuid5(call_id, str(pos))
 
 
 @pxt.udf
-def display_status(
-    pipeline_status: str | None,
-    diarized_err: str | None,
-    summary_err: str | None,
-    sentiment_err: str | None,
-    action_items_err: str | None,
-    category_err: str | None,
-    qa_err: str | None,
-) -> str:
-    """Read-time status. Stored pipeline_status stays a completion heuristic."""
-    if any(
-        _error_text(err)
-        for err in (
-            diarized_err,
-            summary_err,
-            sentiment_err,
-            action_items_err,
-            category_err,
-            qa_err,
-        )
-    ):
-        return "failed"
-    return pipeline_status or "queued"
+def segments_with_ids(call_id: pxt.UUID, segments: list | None) -> list[dict]:
+    return [{"id": str(segment_uuid(call_id, pos)), "pos": pos, **seg} for pos, seg in enumerate(segments or [])]
+
+
+@pxt.udf
+def segment_id(call_id: pxt.UUID, pos: int) -> str:
+    return str(segment_uuid(call_id, pos))

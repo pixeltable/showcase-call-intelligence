@@ -37,6 +37,12 @@ function momentLabel(polarity: ReturnType<typeof momentPolarity>): string {
   return "Negative";
 }
 
+function emptySummary(status: string): string {
+  if (status === "completed") return "No summary: no speech detected.";
+  if (status === "failed") return "Not available: processing failed.";
+  return "Processing...";
+}
+
 export function IntelligenceSidebar({ call }: Props) {
   const actionItems = Array.isArray(call.action_items) ? call.action_items : [];
   const moments = sentimentMoments(call.sentiment ?? null);
@@ -58,7 +64,7 @@ export function IntelligenceSidebar({ call }: Props) {
           </ul>
         ) : (
           <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
-            {bullets[0] || call.summary || "Processing..."}
+            {bullets[0] || call.summary || emptySummary(call.status)}
           </p>
         )}
       </section>
@@ -76,7 +82,7 @@ export function IntelligenceSidebar({ call }: Props) {
 
       <section>
         <h3 className="text-xs uppercase tracking-wide text-slate-400">Category</h3>
-        <p className="mt-1 text-sm">{call.category ?? "—"}</p>
+        <p className="mt-1 text-sm">{call.category ?? "-"}</p>
       </section>
 
       <section>
@@ -85,7 +91,7 @@ export function IntelligenceSidebar({ call }: Props) {
           {(["empathy", "resolution", "compliance", "overall"] as const).map((key) => (
             <div key={key}>
               <dt className="text-slate-400">{qaLabel(call.vertical, key)}</dt>
-              <dd>{String(qa[key] ?? "—")}</dd>
+              <dd>{String(qa[key] ?? "-")}</dd>
             </div>
           ))}
         </dl>

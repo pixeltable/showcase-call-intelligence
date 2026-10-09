@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Kpis } from "../api/client";
-import { api } from "../api";
+import { api } from "../api/client";
 import { DEFAULT_VERTICAL, getProfile } from "../lib/verticals";
 
 export function KpiBanner() {

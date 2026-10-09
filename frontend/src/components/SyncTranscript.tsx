@@ -31,16 +31,26 @@ export function SyncTranscript({
   onSeek,
   onSelectSegment,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Scroll the transcript box only; scrollIntoView would also move the page during playback.
   useEffect(() => {
-    const scrollId = highlightSegmentId || activeSegmentId;
-    if (!scrollId) return;
-    refs.current[scrollId]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const scrollId = activeSegmentId ?? highlightSegmentId;
+    const box = containerRef.current;
+    const el = scrollId ? refs.current[scrollId] : null;
+    if (!box || !el) return;
+    const top = el.offsetTop;
+    if (top < box.scrollTop || top + el.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTo({ top: Math.max(0, top - 8), behavior: "smooth" });
+    }
   }, [activeSegmentId, highlightSegmentId]);
 
   return (
-    <div className="max-h-[420px] space-y-2 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+    <div
+      ref={containerRef}
+      className="relative max-h-[420px] space-y-2 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3"
+    >
       {segments.map((seg) => {
         const active = seg.id === activeSegmentId || (currentTime >= seg.start_sec && currentTime <= seg.end_sec);
         const highlighted = highlightSegmentId === seg.id;
@@ -71,7 +81,7 @@ export function SyncTranscript({
             <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
               <span className="font-semibold uppercase">{speakerLabel(vertical, seg.speaker)}</span>
               <span>
-                {seg.start_sec.toFixed(1)}s – {seg.end_sec.toFixed(1)}s
+                {seg.start_sec.toFixed(1)}s - {seg.end_sec.toFixed(1)}s
               </span>
             </div>
             <p className="text-sm leading-relaxed">{seg.text}</p>

@@ -1,0 +1,321 @@
+{
+  "measured_at": "2026-09-28T22:25:58+00:00",
+  "model": "llama3.1",
+  "rows": 10,
+  "add_field": {
+    "shared": {
+      "files_touched": 3,
+      "lines_added": 15,
+      "lines_removed": 0,
+      "files": {
+        "shared/call_center_api/enrichment.py": {
+          "added": 9,
+          "removed": 0
+        },
+        "shared/call_center_api/schemas.py": {
+          "added": 1,
+          "removed": 0
+        },
+        "shared/call_center_api/verticals.py": {
+          "added": 5,
+          "removed": 0
+        }
+      }
+    },
+    "pixeltable": {
+      "cost": {
+        "files_touched": 2,
+        "lines_added": 6,
+        "lines_removed": 0,
+        "files": {
+          "backends/pixeltable/app.py": {
+            "added": 2,
+            "removed": 0
+          },
+          "backends/pixeltable/functions.py": {
+            "added": 4,
+            "removed": 0
+          }
+        }
+      },
+      "steps": [
+        {
+          "step": "restart the pxt daemon (shared module changed)",
+          "command": "uv run --quiet pxt daemon restart",
+          "sec": 1.68,
+          "ok": true
+        },
+        {
+          "step": "pxt schema update: add the column, backfill every row",
+          "command": "uv run --quiet pxt schema update app.py call_center -f",
+          "sec": 54.28,
+          "ok": true
+        },
+        {
+          "step": "pxt service update: serve the new column",
+          "command": "uv run --quiet pxt service update app.py call_center -f",
+          "sec": 10.81,
+          "ok": true
+        }
+      ],
+      "total_sec": 66.77,
+      "rows": 10,
+      "rows_with_topics_field": 10,
+      "rows_with_topics": 10,
+      "new_call_has_topics": true,
+      "example": [
+        "Billing Issue",
+        "Refund Request"
+      ]
+    },
+    "reference": {
+      "cost": {
+        "files_touched": 8,
+        "lines_added": 50,
+        "lines_removed": 0,
+        "files": {
+          "backends/reference/alembic/versions/004_topics.py": {
+            "added": 12,
+            "removed": 0
+          },
+          "backends/reference/app/models.py": {
+            "added": 1,
+            "removed": 0
+          },
+          "backends/reference/app/routers/calls.py": {
+            "added": 1,
+            "removed": 0
+          },
+          "backends/reference/app/services/ollama_client.py": {
+            "added": 5,
+            "removed": 0
+          },
+          "backends/reference/worker/tasks/__init__.py": {
+            "added": 1,
+            "removed": 0
+          },
+          "backends/reference/worker/tasks/backfill_topics.py": {
+            "added": 28,
+            "removed": 0
+          },
+          "backends/reference/worker/tasks/process_call.py": {
+            "added": 1,
+            "removed": 0
+          },
+          "backends/reference/worker/tasks/resume_call.py": {
+            "added": 1,
+            "removed": 0
+          }
+        }
+      },
+      "steps": [
+        {
+          "step": "alembic upgrade head: add the column",
+          "command": "uv run alembic upgrade head",
+          "sec": 0.56,
+          "ok": true
+        },
+        {
+          "step": "restart the API and the Celery worker",
+          "sec": 9.32,
+          "ok": true
+        },
+        {
+          "step": "run the backfill task over every processed call",
+          "command": "uv run python -c from worker.tasks.backfill_topics import backfill_topics; print(backfill_topics())",
+          "sec": 58.22,
+          "ok": true
+        }
+      ],
+      "total_sec": 68.1,
+      "rows": 10,
+      "rows_with_topics_field": 10,
+      "rows_with_topics": 10,
+      "new_call_has_topics": true,
+      "example": [
+        "billing",
+        "refund"
+      ]
+    }
+  },
+  "rerun_step": {
+    "shared": {
+      "files_touched": 1,
+      "lines_added": 4,
+      "lines_removed": 4,
+      "files": {
+        "shared/call_center_api/verticals.py": {
+          "added": 4,
+          "removed": 4
+        }
+      }
+    },
+    "pixeltable": {
+      "cost": {
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_removed": 0,
+        "files": {}
+      },
+      "steps": [
+        {
+          "step": "restart the pxt daemon (shared module changed)",
+          "command": "uv run --quiet pxt daemon restart",
+          "sec": 1.82,
+          "ok": true
+        },
+        {
+          "step": "pxt recompute calls summary: one LLM call per row",
+          "command": "uv run --quiet pxt recompute call_center/calls summary -f",
+          "sec": 109.0,
+          "ok": true
+        },
+        {
+          "step": "pxt service restart: new uploads use the new prompt",
+          "command": "uv run --quiet pxt service restart call_center/api",
+          "sec": 9.33,
+          "ok": true
+        }
+      ],
+      "total_sec": 120.15,
+      "rows": 10,
+      "summaries_changed": 10,
+      "transcripts_untouched": 10,
+      "probe_comment_still_anchored": true
+    },
+    "reference": {
+      "cost": {
+        "files_touched": 2,
+        "lines_added": 30,
+        "lines_removed": 0,
+        "files": {
+          "backends/reference/worker/tasks/__init__.py": {
+            "added": 1,
+            "removed": 0
+          },
+          "backends/reference/worker/tasks/resummarize.py": {
+            "added": 29,
+            "removed": 0
+          }
+        }
+      },
+      "steps": [
+        {
+          "step": "restart the API and the Celery worker",
+          "sec": 9.31,
+          "ok": true
+        },
+        {
+          "step": "run the re-summarize task over every processed call",
+          "command": "uv run python -c from worker.tasks.resummarize import resummarize; print(resummarize())",
+          "sec": 91.91,
+          "ok": true
+        }
+      ],
+      "total_sec": 101.22,
+      "rows": 10,
+      "summaries_changed": 10,
+      "transcripts_untouched": 10,
+      "probe_comment_still_anchored": true
+    },
+    "reference_full_reprocess": {
+      "cost": {
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_removed": 0,
+        "files": {}
+      },
+      "steps": [
+        {
+          "step": "restart the API and the Celery worker",
+          "sec": 9.36,
+          "ok": true
+        },
+        {
+          "step": "re-queue process_call for every call and wait",
+          "sec": 712.99,
+          "ok": true
+        }
+      ],
+      "total_sec": 722.35,
+      "rows": 10,
+      "summaries_changed": 10,
+      "transcripts_untouched": 0,
+      "probe_comment_still_anchored": false
+    }
+  },
+  "recover": {
+    "pixeltable": {
+      "status_after_outage": "failed",
+      "segments_kept_through_outage": 2,
+      "error_after_outage": "Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download",
+      "failed_cells": [
+        "action_items",
+        "category",
+        "qa_scorecard",
+        "sentiment",
+        "summary"
+      ],
+      "steps": [
+        {
+          "step": "pxt errors: which cells failed",
+          "command": "uv run --quiet pxt errors call_center/calls --json",
+          "sec": 0.31,
+          "ok": true
+        },
+        {
+          "step": "pxt recompute summary --errors-only",
+          "command": "uv run --quiet pxt recompute call_center/calls summary --errors-only -f",
+          "sec": 4.78,
+          "ok": true
+        },
+        {
+          "step": "pxt recompute action_items --errors-only",
+          "command": "uv run --quiet pxt recompute call_center/calls action_items --errors-only -f",
+          "sec": 2.34,
+          "ok": true
+        },
+        {
+          "step": "pxt recompute sentiment --errors-only",
+          "command": "uv run --quiet pxt recompute call_center/calls sentiment --errors-only -f",
+          "sec": 7.57,
+          "ok": true
+        },
+        {
+          "step": "pxt recompute category --errors-only",
+          "command": "uv run --quiet pxt recompute call_center/calls category --errors-only -f",
+          "sec": 2.03,
+          "ok": true
+        },
+        {
+          "step": "pxt recompute qa_scorecard --errors-only",
+          "command": "uv run --quiet pxt recompute call_center/calls qa_scorecard --errors-only -f",
+          "sec": 4.6,
+          "ok": true
+        }
+      ],
+      "total_sec": 21.63,
+      "status_after_recovery": "completed",
+      "transcript_untouched": true,
+      "searchable_after_recovery": true
+    },
+    "reference": {
+      "status_after_outage": "failed",
+      "segments_kept_through_outage": 2,
+      "error_after_outage": "[Errno 61] Connection refused",
+      "failed_cells": null,
+      "steps": [
+        {
+          "step": "run the resume task written for this (resume_call.py)",
+          "command": "uv run python -c from worker.tasks.resume_call import resume_call_processing; resume_call_processing('b2e66b09-2a42-43c9-a92f-2f653452aa7d')",
+          "sec": 26.49,
+          "ok": true
+        }
+      ],
+      "total_sec": 26.49,
+      "status_after_recovery": "completed",
+      "transcript_untouched": true,
+      "searchable_after_recovery": true
+    }
+  }
+}

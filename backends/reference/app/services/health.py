@@ -42,12 +42,16 @@ def _postgres_check() -> HealthCheckResult:
 
 
 def _redis_check() -> HealthCheckResult:
+    client = None
     try:
         client = redis.from_url(settings.redis_url)
         client.ping()
         return HealthCheckResult(ok=True)
     except Exception as exc:
         return HealthCheckResult(ok=False, detail=str(exc))
+    finally:
+        if client is not None:
+            client.close()
 
 
 def _celery_check() -> HealthCheckResult:

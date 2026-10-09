@@ -22,7 +22,6 @@ export interface Segment {
   start_sec: number;
   end_sec: number;
   text: string;
-  pos: number;
 }
 
 export interface Comment {
@@ -32,11 +31,9 @@ export interface Comment {
   start_sec: number;
   author: string;
   comment: string;
-  created_at: string;
 }
 
 export interface CallDetail extends CallSummary {
-  audio_path: string;
   original_filename: string;
   action_items: string[] | null;
   sentiment: Record<string, unknown> | null;
@@ -52,34 +49,28 @@ export interface Kpis {
   avg_sentiment_score: number;
 }
 
-export interface HealthCheckResult {
-  ok: boolean;
-  detail?: string | null;
-}
-
 export interface HealthResponse {
   status: "ok" | "degraded";
   backend: "reference" | "pixeltable";
-  checks: Record<string, HealthCheckResult>;
+  checks: Record<string, { ok: boolean; detail?: string | null }>;
 }
 
 export interface SearchHit {
   call_id: string;
   segment_id: string;
   agent_id: string;
-  customer_id: string;
   queue: string;
   call_date: string;
   speaker: string;
   start_sec: number;
-  end_sec: number;
   text: string;
   score: number | null;
-  segment_pos: number;
   match_type: "keyword" | "semantic";
   media_type: "audio" | "video";
   original_filename: string;
 }
+
+export const TERMINAL_STATUSES = new Set(["completed", "failed"]);
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -102,21 +93,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+/** Routes Pixeltable declares with `add_query_route` wrap rows in `{rows: [...]}`; the Reference returns a list. */
+async function requestRows<T>(path: string): Promise<T[]> {
+  const body = await request<T[] | { rows: T[] }>(path);
+  return Array.isArray(body) ? body : body.rows;
+}
+
 export const api = {
   listCalls: (params: Record<string, string | number | undefined> = {}) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== "") qs.set(k, String(v));
     });
-    return request<CallSummary[]>(`/api/calls?${qs}`);
+    return requestRows<CallSummary>(`/api/calls?${qs}`);
   },
   getKpis: () => request<Kpis>("/api/calls/kpis"),
   getHealth: () => request<HealthResponse>("/api/health"),
   getCall: (id: string) => request<CallDetail>(`/api/calls/${id}`),
   uploadCall: (form: FormData) =>
     request<{ id: string; status: string }>("/api/calls/upload", { method: "POST", body: form }),
-  search: (q: string, mode = "hybrid") =>
-    request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}&mode=${mode}`),
+  search: (q: string) => requestRows<SearchHit>(`/api/search?q=${encodeURIComponent(q)}&mode=hybrid`),
   createComment: (payload: {
     call_id: string;
     segment_id?: string;

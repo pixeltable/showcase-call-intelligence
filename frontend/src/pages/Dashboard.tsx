@@ -29,7 +29,7 @@ export function Dashboard() {
   const { data: health } = useQuery({ queryKey: ["health"], queryFn: api.getHealth, staleTime: 60_000 });
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       <header>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold">Conversation Intelligence</h1>
@@ -61,6 +61,7 @@ export function Dashboard() {
 
       <div className="flex flex-wrap gap-3">
         <select
+          aria-label="Filter recordings by sentiment"
           value={sentimentFilter}
           onChange={(e) => setSentimentFilter(e.target.value)}
           className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
@@ -71,6 +72,7 @@ export function Dashboard() {
           <option value="positive">Positive</option>
         </select>
         <input
+          aria-label="Filter recordings by queue, stage, or series"
           value={queueInput}
           onChange={(e) => setQueueInput(e.target.value)}
           placeholder="Filter by queue / stage / series"
@@ -85,6 +87,6 @@ export function Dashboard() {
         pendingIds={pendingIds}
         onSettled={settle}
       />
-    </div>
+    </main>
   );
 }

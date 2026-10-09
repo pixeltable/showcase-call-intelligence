@@ -20,13 +20,9 @@ def _ollama_check() -> HealthCheckResult:
         if resp.status_code != 200:
             return HealthCheckResult(ok=False, detail=f"HTTP {resp.status_code}")
         names = {m.get("name", "") for m in resp.json().get("models", [])}
-        missing: list[str] = []
-        for required in (settings.ollama_model,):
-            base = required.split(":")[0]
-            if not any(n == required or n.startswith(f"{base}:") for n in names):
-                missing.append(required)
-        if missing:
-            return HealthCheckResult(ok=False, detail=f"Missing models: {', '.join(missing)}")
+        required = settings.ollama_model if ":" in settings.ollama_model else f"{settings.ollama_model}:latest"
+        if required not in names:
+            return HealthCheckResult(ok=False, detail=f"Missing model: {required}")
         return HealthCheckResult(ok=True, detail=f"Models available at {host}")
     except httpx.HTTPError as exc:
         return HealthCheckResult(ok=False, detail=str(exc))

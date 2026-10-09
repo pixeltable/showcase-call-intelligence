@@ -1,6 +1,11 @@
 name: Schema smoke
 
 on:
+  pull_request:
+    paths:
+      - "backends/pixeltable/**"
+      - "shared/**"
+      - ".github/workflows/schema-smoke.yml"
   schedule:
     - cron: "0 0 * * 1"
   workflow_dispatch:
@@ -27,9 +32,11 @@ jobs:
             backends/pixeltable/uv.lock
             shared/uv.lock
       - name: Install the Pixeltable backend
-        run: uv sync
-      - name: Pixeltable is on the 0.7 line
-        run: uv run python -c "import pixeltable as pxt; assert pxt.__version__.startswith('0.7.'), pxt.__version__"
+        run: uv sync --frozen
+      - name: Pixeltable satisfies the supported release floor
+        run: uv run --frozen python -c "import pixeltable as pxt; from packaging.version import Version; assert Version('0.7.15') <= Version(pxt.__version__) < Version('0.8'), pxt.__version__"
+      - name: Exercise the API, computed columns, view, index, and media without model calls
+        run: uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q
       - name: Validate app.py with Pixeltable's own checks
         run: |
           uv run pxt schema check app.py

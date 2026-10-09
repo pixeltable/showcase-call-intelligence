@@ -26,7 +26,7 @@ export function UploadForm({ onUploaded }: Props) {
   const mutation = useMutation({
     mutationFn: (form: FormData) => api.uploadCall(form),
     onSuccess: ({ id }) => {
-      setStatus("Upload queued. Processing in the background.");
+      setStatus("Upload accepted. Processing in the background.");
       formRef.current?.reset();
       setVertical(DEFAULT_VERTICAL);
       onUploaded?.(id);
@@ -38,6 +38,7 @@ export function UploadForm({ onUploaded }: Props) {
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (mutation.isPending) return;
     const form = new FormData(e.currentTarget);
     // datetime-local has no offset; send an absolute instant so both backends store the same time.
     form.set("call_date", new Date(String(form.get("call_date"))).toISOString());
@@ -80,15 +81,15 @@ export function UploadForm({ onUploaded }: Props) {
         </label>
         <label className="block text-sm">
           {labels.agentId}
-          <input name="agent_id" required placeholder="agent-101" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
+          <input name="agent_id" required maxLength={128} placeholder="agent-101" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
         </label>
         <label className="block text-sm">
           {labels.customerId}
-          <input name="customer_id" required placeholder="cust-4821" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
+          <input name="customer_id" required maxLength={128} placeholder="cust-4821" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
         </label>
         <label className="block text-sm md:col-span-2">
           {labels.queue}
-          <input name="queue" required placeholder="billing" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
+          <input name="queue" required maxLength={128} placeholder="billing" className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 px-2 py-1" />
         </label>
       </div>
       <button
@@ -98,7 +99,7 @@ export function UploadForm({ onUploaded }: Props) {
       >
         {mutation.isPending ? "Uploading..." : "Upload & Process"}
       </button>
-      {status && <p className="text-sm text-slate-400">{status}</p>}
+      {status && <p role={mutation.isError ? "alert" : "status"} className={mutation.isError ? "text-sm text-red-400" : "text-sm text-slate-400"}>{status}</p>}
     </form>
   );
 }

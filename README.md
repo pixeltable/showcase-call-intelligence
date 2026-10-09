@@ -3,14 +3,24 @@
 [![CI](https://github.com/pixeltable/showcase-call-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/pixeltable/showcase-call-intelligence/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-One call-intelligence product, built twice. **Reference** is the stack an AI coding assistant writes for it: FastAPI, Celery, Redis, Postgres with pgvector, Alembic. **Pixeltable** is one file, [`backends/pixeltable/app.py`](backends/pixeltable/app.py). Both serve the same API to the same React UI, run the same models on the same ten recordings, and pass the same parity gates. Upload a call and each one extracts the audio, transcribes and diarizes it, enriches it five ways with an LLM, and indexes every segment for keyword and semantic search.
+Give a coding agent a backend it can extend without rebuilding media storage, dependency execution, derived-data maintenance, and vector indexing for each feature. This showcase implements one call-intelligence product twice. **Reference** is one implementation built with an AI coding assistant: FastAPI, Celery, Redis, Postgres with pgvector, Alembic. **Pixeltable** declares its schema, processing pipeline, queries, and HTTP routes in [`backends/pixeltable/app.py`](backends/pixeltable/app.py), with shared domain transforms in [`shared/call_center_api`](shared/call_center_api).
+
+Both serve the same React UI and REST contract, use the same models and fixtures, and have shared parity gates. Upload a recording to extract its audio, transcribe and diarize it, derive summaries and follow-ups, search individual segments, and attach a coaching note to the evidence. The comparison makes the backend work behind an AI-generated demo inspectable: what the application owns, what Pixeltable maintains, and what still needs deployment engineering.
+
+- **Build:** [run the app](#run-it), then [extend a computed column](#build-with-a-coding-agent).
+- **Verify without model downloads:** [run the deterministic backend tests](#verify-the-backend-without-models).
+- **Evaluate:** read the [methodology](compare/METHODOLOGY.md), [pipeline specification](compare/PIPELINE_SPEC.md), and [review with validation boundaries](docs/REVIEW.md).
+
+The current backend targets [Pixeltable **0.7.15**](https://pypi.org/project/pixeltable/0.7.15/), the latest stable PyPI release verified on October 8, 2026. Published latency and evolution measurements below retain their original **0.7.11** environment; they are historical results, not fresh measurements of the upgraded code.
+
+Speaker roles, sentiment, and QA scores are illustrative model outputs. Role labels use a first-speaker heuristic, and the fixtures include synthetic calls and repeated video excerpts. These fixtures validate software behavior; they do not establish ASR accuracy, diarization accuracy, or business decision quality.
 
 ![Code each backend owns, and what a change to live data costs](compare/results/summary.svg)
 
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,166 | 414 |
+| App code you maintain (lines) | 1,171 | 442 |
 | Files | 24 | 3 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |
@@ -77,7 +87,23 @@ class TranscriptSegments(
 ```
 <!-- /results:pipeline_code -->
 
-`pxt schema update app.py call_center` creates the tables, and inserting a row computes every column, its segment rows and their embeddings. Nothing schedules the work or records its progress, and a failed cell keeps its error beside the others.
+`pxt schema update app.py call_center` creates the tables, and inserting a row computes every column, its segment rows and their embeddings. Pixeltable schedules the computed-column dependencies and records cell failures. The application keeps the upload and review contract; a failed cell keeps its error beside the other results.
+
+## Build with a coding agent
+
+Start the agent in this repository with the [Pixeltable skill](https://github.com/pixeltable/pixeltable-skill) and [CONTRIBUTING.md](CONTRIBUTING.md). A useful first task is: add a follow-up recommendation computed from the existing transcript, expose it in the shared API and UI, and show how to recompute that field on existing calls while keeping transcripts and comment anchors unchanged. The [evolution examples](compare/evolve/) demonstrate those changes on both implementations.
+
+Keep model calls in computed columns, segment expansion in an iterator view, and semantic lookup in an embedding index. Keep product rules and parsers in the shared package. Apply changes with `pxt schema diff` and `pxt schema update`, run the required recompute for changed expressions, then `pxt service update ... -f`. Read `pxt errors call_center/calls` before retrying failed cells. The [pipeline map](compare/BACKEND_MAPPING.md) shows where each responsibility lives.
+
+## Verify the backend without models
+
+```bash
+cd backends/pixeltable
+uv sync --frozen
+uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q
+```
+
+This test suite creates a temporary catalog and exercises the real tables, computed-column execution, audio/video handling, segment view, vector index, API validation, comments, deletion, and model failure reporting. Deterministic substitutes replace the ASR, LLM, and embedding providers. It needs no Docker, provider tokens, or downloaded model weights, and does not touch an existing catalog. A successful run verifies backend integration; a real provider run is still a separate check.
 
 ## Changing the running system
 
@@ -137,7 +163,7 @@ Same machine, one call in flight, backends interleaved ([`scripts/benchmark.py`]
 
 30 timed runs per backend; runs that did not complete: Reference 0, Pixeltable 0 (medians use completed runs; errors are in `benchmarks.json`).
 
-First call after start (model loading included): Reference 35.6s, Pixeltable 41.0s. Upload accepted in 50ms and 20ms (median).
+Warm-up call (process coldness not verified): Reference 35.6s, Pixeltable 41.0s. Upload accepted in 50ms and 20ms (median).
 <!-- /results:pipeline -->
 
 Where the time goes, from the statuses the Reference commits (Pixeltable reports no stages; both run the same models):
@@ -172,7 +198,7 @@ Both backends make the same WhisperX and LLM calls, so most of the pipeline's ti
 - **Progress.** It commits a status after each stage and lists a call as soon as it is uploaded. A Pixeltable row commits with all its computed columns, so until then the API says `processing` and the roster does not show the call.
 - **Throughput.** Pixeltable's inserts into one table hold its lock for the whole computation and run one at a time. Celery runs as many calls as it has workers. Here both run one at a time.
 - **Backfills.** The Reference's backfill task commits call by call. `pxt schema update` backfills a new column in one transaction, and one failing row rolls back the column.
-- **Accepted work survives a restart.** The Reference writes a `queued` row and a Celery message before it answers `202`. The Pixeltable app holds an accepted upload in memory until its row commits, so a service restart in between loses the call: its id returns 404 and the upload stays on disk.
+- **A durable call record.** The Reference commits a `queued` row before enqueueing work, so the record survives an API restart. This does not guarantee processing resumes: its database commit and broker publish are separate, Redis persistence is not configured, and Celery uses early acknowledgement. The Pixeltable app holds an accepted upload in memory until its row commits, so a service restart in between loses the call: its id returns 404 and the upload stays on disk.
 - **Reads.** Where Pixeltable's endpoints are hand-written, the Reference answers faster: building a Pixeltable query resolves the table once per selected expression. This app builds each select list once per process; semantic search, whose select list depends on the request, still pays that cost.
 - **Familiarity.** Every part of it is a tool most backend engineers know.
 
@@ -180,14 +206,14 @@ More, and what neither has: [compare/WHY_PIXELTABLE.md](compare/WHY_PIXELTABLE.m
 
 ## Run it
 
-Prerequisites: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 18+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted.
+Prerequisites: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted.
 
 ```bash
 git clone https://github.com/pixeltable/showcase-call-intelligence.git && cd showcase-call-intelligence
 cp .env.example .env                                  # set HF_TOKEN
 docker compose up -d
 docker compose exec ollama ollama pull llama3.1       # about 5 GB
-uv sync && (cd backends/pixeltable && uv sync) && (cd backends/reference && uv sync) && (cd frontend && npm install)
+uv sync --frozen && (cd backends/pixeltable && uv sync --frozen) && (cd backends/reference && uv sync --frozen) && (cd frontend && npm ci)
 ./scripts/run_compare.sh                              # both APIs, the Celery worker, both UIs
 ./scripts/run_compare.sh seed                         # ingest the 10 fixtures into each backend
 ```
@@ -197,13 +223,14 @@ uv sync && (cd backends/pixeltable && uv sync) && (cd backends/reference && uv s
 | http://localhost:5173 | Reference | :8001 |
 | http://localhost:5174 | Pixeltable | :8000 |
 
-Seeding is slow: each call makes five LLM requests to an Ollama that runs on the CPU. Then open a call, click a transcript segment to seek the audio or video, search for "billing" or "cancel", and leave a coaching comment on a segment. `./scripts/run_compare.sh stop` stops everything and keeps the data.
+**Seeding resets both stores and deletes existing demo uploads.** Use a dedicated checkout and its demo data. Seeding is slow: each call makes five LLM requests to an Ollama that runs on the CPU. Then open a call, click a transcript segment to seek the audio or video, search for "billing" or "cancel", and leave a coaching comment on a segment. `./scripts/run_compare.sh stop` stops everything and keeps the data.
 
 To run the Pixeltable side alone, from `backends/pixeltable` with `.env` exported (the catalog defaults to `~/.pixeltable`):
 
 ```bash
-uv run pxt schema update app.py call_center
-uv run pxt service update app.py call_center --port 8000
+uv run --frozen pxt schema check app.py
+uv run --frozen pxt schema update app.py call_center -f
+uv run --frozen pxt service update app.py call_center --port 8000 -f
 ```
 
 ## Measure it
@@ -223,6 +250,14 @@ Every number above is written into this file by `render_results.py` from [`compa
 Apple M4 Pro, 14 cores, 48 GB, Darwin 26.6.1; Python 3.12.7; Pixeltable 0.7.11, WhisperX 3.8.6, torch 2.8.0; Ollama 0.31.1 serving `llama3.1` (46e0c10c039e) in Docker (4 cpus, 8307830784 bytes). Pipeline measured 2026-09-28T20:34:30+00:00, reads 2026-09-28T22:24:37+00:00, at `b37a52a` with local changes.
 <!-- /results:environment -->
 
+Source counts are refreshed when code changes. Runtime measurements require a fresh full run on both stacks before making a claim about the current release. The benchmark warms whichever service processes are already running; it does not prove a cold start. It verifies Ollama cache reset and fingerprints application source to avoid combining measurements from different dirty checkouts.
+
+## Deployment boundary
+
+This is a local, single-tenant showcase. Docker ports bind to localhost. Before accepting external traffic, provide authentication, tenant isolation, rate and admission limits, a durable upload handoff with restart recovery, and a tested backup/restore workflow. The comparison does not validate those capabilities.
+
+On Pixeltable, `completed` describes the stored call transforms. Semantic-index readiness is separate: a segment embedding can fail while its transcript and enrichments remain available. Inserts log failed-column diagnostics, and `pxt.get_dir_tree()` exposes recorded operation error counts; those counts are historical diagnostics, not a readiness guarantee. Search returns an explicit error when query embedding fails and omits missing vectors instead of returning unscored semantic hits. A production intake design should persist and expose search readiness, as detailed in the [review](docs/REVIEW.md).
+
 ## Troubleshooting
 
 - `curl -s localhost:8001/api/health` and `localhost:8000/api/health` list each dependency. `degraded` usually means the Ollama model is missing: pull it with `docker compose exec ollama ollama pull llama3.1`, not a host `ollama pull`.
@@ -239,5 +274,6 @@ Apple M4 Pro, 14 cores, 48 GB, Darwin 26.6.1; Python 3.12.7; Pixeltable 0.7.11, 
 - [compare/PIPELINE_SPEC.md](compare/PIPELINE_SPEC.md): the contract both implement
 - [compare/BACKEND_MAPPING.md](compare/BACKEND_MAPPING.md): where each step lives in each backend
 - [CONTRIBUTING.md](CONTRIBUTING.md): rules, layout, checks
+- [docs/REVIEW.md](docs/REVIEW.md): findings, fixes, verification, and remaining deployment requirements
 
 Licensed under [Apache-2.0](LICENSE).

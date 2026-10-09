@@ -166,14 +166,19 @@ def reset_llm(host: str | None = None, model: str | None = None) -> None:
     """
     host = (host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip("/")
     model = model or os.getenv("OLLAMA_MODEL", "llama3.1")
-    httpx.post(f"{host}/api/generate", json={"model": model, "keep_alive": 0}, timeout=120)
-    deadline = time.time() + 120
-    while time.time() < deadline:
-        loaded = httpx.get(f"{host}/api/ps", timeout=10).json().get("models", [])
-        if not any(m["name"].split(":")[0] == model.split(":")[0] for m in loaded):
+    required = model if ":" in model else f"{model}:latest"
+    httpx.post(f"{host}/api/generate", json={"model": model, "keep_alive": 0}, timeout=120).raise_for_status()
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        response = httpx.get(f"{host}/api/ps", timeout=10)
+        response.raise_for_status()
+        loaded = response.json().get("models", [])
+        if not any(m["name"] == required for m in loaded):
             break
         time.sleep(0.5)
-    httpx.post(f"{host}/api/generate", json={"model": model, "prompt": "", "stream": False}, timeout=600)
+    else:
+        raise TimeoutError(f"Ollama model {required} remained loaded; refusing to measure with a reused prompt cache")
+    httpx.post(f"{host}/api/generate", json={"model": model, "prompt": "", "stream": False}, timeout=600).raise_for_status()
 
 
 def backends() -> tuple[Api, Api]:

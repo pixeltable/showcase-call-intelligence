@@ -321,7 +321,7 @@ def pipeline_table(bench: dict) -> str:
     if cold:
         accept = {b: median([r["accept_sec"] for f in bench["pipeline"].values() for r in f[b]]) for b in BACKENDS}
         out += (
-            f"\n\nFirst call after start (model loading included): Reference {cold['reference']['complete_sec']:.1f}s,"
+            f"\n\nWarm-up call (process coldness not verified): Reference {cold['reference']['complete_sec']:.1f}s,"
             f" Pixeltable {cold['pixeltable']['complete_sec']:.1f}s. Upload accepted in"
             f" {accept['reference'] * 1000:.0f}ms and {accept['pixeltable'] * 1000:.0f}ms (median)."
         )

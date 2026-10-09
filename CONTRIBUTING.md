@@ -32,12 +32,12 @@ scripts/                  # run_compare.sh, seed, gates, benchmarks, metrics, re
 
 ## Development setup
 
-Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 18+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted.
+Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.15; historical benchmark JSON retains the release actually measured.
 
 ```bash
 cp .env.example .env                                  # set HF_TOKEN
 docker compose up -d && docker compose exec ollama ollama pull llama3.1
-uv sync && (cd backends/pixeltable && uv sync) && (cd backends/reference && uv sync) && (cd frontend && npm install)
+uv sync --frozen && (cd backends/pixeltable && uv sync --frozen) && (cd backends/reference && uv sync --frozen) && (cd frontend && npm ci)
 ./scripts/run_compare.sh                              # both APIs, the Celery worker and both UIs
 ./scripts/run_compare.sh seed                         # reset both stores, ingest the 10 fixtures
 ```
@@ -50,6 +50,8 @@ Without services, as CI runs them:
 
 ```bash
 (cd shared && uv run --with pytest python -m pytest tests -q)
+(cd backends/pixeltable && uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q)
+(cd backends/reference && uv run --frozen --with pytest python -m pytest tests/test_contract.py -q)
 uvx ruff@0.16.9 check . && uv run --with pytest python -m pytest scripts/tests -q
 uv run python scripts/metrics.py --check
 uv run python scripts/render_results.py --check
@@ -66,7 +68,7 @@ uv run python scripts/metrics.py && uv run python scripts/render_results.py
 (cd backends/pixeltable && PXT_INSERT_SMOKE=1 uv run python -m unittest tests.test_insert_smoke -v)
 ```
 
-Run the scripts through the environment `run_compare.sh` sets up: they read `REF_API`, `PXT_API`, `PIXELTABLE_HOME` and `PXT_PORT` from it. To reproduce a published run, restart both stacks first (`./scripts/run_compare.sh`), so the first timed call includes model loading as the benchmark reports.
+Run the scripts through the environment `run_compare.sh` sets up: they read `REF_API`, `PXT_API`, `PIXELTABLE_HOME` and `PXT_PORT` from it. Seeding warms model processes. The benchmark's initial call warms the current process state and is excluded from the medians; a dedicated cold-start experiment must separately record process restarts and prewarming.
 
 | Script | Does |
 |---|---|
@@ -85,6 +87,6 @@ Run the scripts through the environment `run_compare.sh` sets up: they read `REF
 
 1. Keep both backends on [compare/PIPELINE_SPEC.md](compare/PIPELINE_SPEC.md). A deliberate difference goes in [compare/CAPABILITY_PARITY.md](compare/CAPABILITY_PARITY.md).
 2. Re-run the gates, then `metrics.py` and `render_results.py`, and commit the regenerated files.
-3. If a timing or change cost could move, re-run `benchmark.py` or `bench_evolve.py` and commit their JSON.
+3. If a timing or change cost could move, re-run `benchmark.py` or `bench_evolve.py` before publishing updated runtime claims. Source counts may be refreshed separately; label retained runtime measurements as historical. `benchmark.py` fingerprints source and refuses to merge sections measured from different dirty checkouts, and its warm-up call does not establish a verified cold start.
 
 Out of scope for now: auth, rate limiting, multi-tenancy, backup and restore.

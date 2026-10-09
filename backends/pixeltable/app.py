@@ -11,6 +11,7 @@ declare what each row contains, and a failed cell keeps its error beside the oth
 """
 
 import functools
+import logging
 import shutil
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -20,7 +21,7 @@ from pathlib import Path
 import httpx
 import pixeltable as pxt
 import pixeltable.functions as pxtf
-from fastapi import File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pixeltable.functions.huggingface import sentence_transformer
 from pixeltable.functions.json import list_iterator
@@ -34,11 +35,20 @@ from pixeltable.serving import FastAPIRouter
 import config
 import functions as f
 from call_center_api.constants import ALLOWED_UPLOAD_EXTENSIONS, ALLOWED_VIDEO_EXTENSIONS
-from call_center_api.schemas import CallDetail, CommentCreate
+from call_center_api.schemas import (
+    CallDetail,
+    CallUploadResponse,
+    CommentCreate,
+    CommentOut,
+    HealthResponse,
+    KpiResponse,
+    SearchHit,
+)
 from call_center_api.verticals import normalize_vertical
 
 TableModel = pxt.model_base()
 EMBED = sentence_transformer.using(model_id=config.EMBED_MODEL, normalize_embeddings=True)
+logger = logging.getLogger(__name__)
 
 
 def ollama(messages, *, json: bool = True):
@@ -109,13 +119,15 @@ class CoachingComments(TableModel, name="coaching_comments"):
 
 def errors(t=Calls):
     """Per-cell errors in pipeline order. A failed cell also fails every column computed from it."""
-    return [t.extracted_audio.errormsg, t.diarized.errormsg, t.summary.errormsg, t.action_items.errormsg,
-            t.sentiment.errormsg, t.category.errormsg, t.qa_scorecard.errormsg]  # fmt: skip
+    return [t.audio.errormsg, t.video.errormsg, t.extracted_audio.errormsg, t.source_audio.errormsg,
+            t.diarized.errormsg, t.segments.errormsg, t.transcript.errormsg, t.handle_time_sec.errormsg,
+            t.summary.errormsg, t.action_items.errormsg, t.sentiment.errormsg, t.category.errormsg,
+            t.qa_scorecard.errormsg]  # fmt: skip
 
 
 def no_errors(t=Calls):
     """SQL-expressible, so filters on it keep the index scan and the LIMIT in Postgres."""
-    cond = t.extracted_audio.errormsg == None  # noqa: E711
+    cond = errors(t)[0] == None  # noqa: E711
     for err in errors(t)[1:]:
         cond &= err == None  # noqa: E711
     return cond
@@ -217,7 +229,11 @@ def comments_query() -> pxt.Query:
 
 # ------------------------------------------------------------------------ API
 
-api = FastAPIRouter(name="api", prefix="/api")
+def validate_page_size(limit: int | None = Query(None, ge=1, le=200)) -> None:
+    """Bound declared query routes as well as custom routes before a catalog query runs."""
+
+
+api = FastAPIRouter(name="api", prefix="/api", dependencies=[Depends(validate_page_size)])
 
 # Declared: the rows come straight from a @pxt.query, wrapped as {"rows": [...]}.
 api.add_query_route(path="/calls", query=list_calls, method="get")
@@ -236,7 +252,9 @@ _failed: dict[uuid.UUID, tuple[dict, str]] = {}  # inserts that raised before an
 def _insert(row: dict) -> None:
     try:
         # 'ignore' stores the row even when a cell fails; the error stays on that cell.
-        Calls.insert([row], on_error="ignore")
+        status = Calls.insert([row], on_error="ignore")
+        if status.num_excs:
+            logger.warning("Call %s committed with %s cell errors in %s", row["id"], status.num_excs, status.cols_with_excs)
     except Exception as exc:
         _failed[row["id"]] = (row, f"{type(exc).__name__}: {exc}")
         Path(row["audio"] or row["video"]).unlink(missing_ok=True)  # no row will ever reference it
@@ -244,15 +262,17 @@ def _insert(row: dict) -> None:
         _in_flight.pop(row["id"], None)
 
 
-@api.post("/calls/upload", status_code=202)
+@api.post("/calls/upload", response_model=CallUploadResponse, status_code=202)
 def upload_call(
     audio: UploadFile = File(...),
     call_date: datetime = Form(...),
-    agent_id: str = Form(...),
-    customer_id: str = Form(...),
-    queue: str = Form(...),
+    agent_id: str = Form(..., min_length=1, max_length=128),
+    customer_id: str = Form(..., min_length=1, max_length=128),
+    queue: str = Form(..., min_length=1, max_length=128),
     vertical: str = Form("call_center"),
 ):
+    if call_date.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="call_date must include a timezone offset")
     suffix = Path(audio.filename or "").suffix.lower()
     if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
@@ -284,22 +304,23 @@ def upload_call(
     return {"id": str(call_id), "status": "queued"}
 
 
-@api.get("/calls/kpis")
+@api.get("/calls/kpis", response_model=KpiResponse)
 def get_kpis():
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    row = (
+    rows = (
         Calls.where((Calls.call_date >= week_ago) & no_errors())
         .select(
             call_count=pxtf.count(Calls.id),
             avg_handle_time_sec=pxtf.mean(Calls.handle_time_sec),
             avg_sentiment_score=pxtf.mean(Calls.sentiment.score.astype(pxt.Float)),
         )
-        .collect()[0]
+        .collect()
     )
+    row = rows[0] if len(rows) else dict.fromkeys(KpiResponse.model_fields, 0)
     return {k: v or 0 for k, v in row.items()}
 
 
-@api.get("/calls/{call_id}")
+@api.get("/calls/{call_id}", response_model=CallDetail)
 def get_call(call_id: uuid.UUID):
     pending = _unstored(call_id)  # read before the query, so an insert that commits in between is still found
     rows = detail_query().where(Calls.id == call_id).collect()
@@ -334,7 +355,7 @@ def _media_file(call_id: uuid.UUID, column) -> FileResponse:
     # whatever path a writer stored, serve only uploads and Pixeltable's own media
     if path is None or not path.is_file() or not any(path.is_relative_to(root) for root in config.MEDIA_ROOTS):
         raise HTTPException(status_code=404, detail="Media not available")
-    return FileResponse(path, filename=Path(rows[0]["name"]).name)
+    return FileResponse(path, filename=f"{Path(rows[0]['name']).stem}{path.suffix}")
 
 
 @api.get("/calls/{call_id}/audio")
@@ -360,26 +381,33 @@ def delete_call(call_id: uuid.UUID):
             Path(path).unlink(missing_ok=True)
 
 
-@api.get("/search")
+@api.get("/search", response_model=list[SearchHit])
 def search(
     q: str = Query(min_length=1, max_length=500),
     mode: str = Query("hybrid", pattern="^(keyword|semantic|hybrid)$"),
     limit: int = Query(20, ge=1, le=100),
 ):
     text, s = q.strip(), TranscriptSegments
+    if not text:
+        raise HTTPException(status_code=422, detail="Search query must contain non-whitespace text")
     hits: dict[str, dict] = {}
     if mode in ("keyword", "hybrid"):
         found = keyword_hits_query().where(contains(s.text, text, case=False) & no_errors(s))
         for row in found.order_by(s.call_date, asc=False).limit(limit).collect():
             hits.setdefault(row["segment_id"], {**row, "score": 1.0, "match_type": "keyword"})
     if mode in ("semantic", "hybrid") and len(hits) < limit:
-        sim = s.text.similarity(string=text)
-        for row in s.where(no_errors(s)).order_by(sim, asc=False).limit(limit).select(**hit_columns(), score=sim).collect():
-            hits.setdefault(row["segment_id"], {**row, "match_type": "semantic"})
+        try:
+            sim = s.text.similarity(string=text)
+            found = s.where(no_errors(s) & (sim != None))  # noqa: E711
+            for row in found.order_by(sim, asc=False).limit(limit).select(**hit_columns(), score=sim).collect():
+                hits.setdefault(row["segment_id"], {**row, "match_type": "semantic"})
+        except Exception as exc:
+            logger.warning("Semantic search failed: %s", exc)
+            raise HTTPException(status_code=503, detail="Semantic search is unavailable; try keyword mode") from exc
     return list(hits.values())[:limit]
 
 
-@api.post("/comments", status_code=201)
+@api.post("/comments", response_model=CommentOut, status_code=201)
 def create_comment(payload: CommentCreate):
     rows = Calls.where(Calls.id == payload.call_id).select(segments=Calls.segments).collect()
     if len(rows) == 0:
@@ -393,13 +421,13 @@ def create_comment(payload: CommentCreate):
     return {**row, "id": stored["id"]}
 
 
-@api.get("/comments/call/{call_id}")
+@api.get("/comments/call/{call_id}", response_model=list[CommentOut])
 def list_comments(call_id: uuid.UUID) -> list[dict]:
     c = CoachingComments
     return list(comments_query().where(c.call_id == call_id).order_by(c.created_at).collect())
 
 
-@api.get("/health")
+@api.get("/health", response_model=HealthResponse)
 def health():
     checks = {"catalog": _check(lambda: Calls.table and None), "ollama": _check(_ollama_ready),
               "embed_model": _check(lambda: config.EMBED_MODEL)}  # fmt: skip
@@ -416,6 +444,7 @@ def _check(fn) -> dict:
 
 def _ollama_ready() -> str:
     names = [m["name"] for m in httpx.get(f"{config.OLLAMA_HOST}/api/tags", timeout=5).json()["models"]]
-    if not any(n.split(":")[0] == config.OLLAMA_MODEL.split(":")[0] for n in names):
+    required = config.OLLAMA_MODEL if ":" in config.OLLAMA_MODEL else f"{config.OLLAMA_MODEL}:latest"
+    if required not in names:
         raise RuntimeError(f"Missing model {config.OLLAMA_MODEL}")
     return f"Models available at {config.OLLAMA_HOST}"

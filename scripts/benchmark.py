@@ -8,13 +8,15 @@ Both backends share Ollama and the CPU, so they never run together: every fixtur
 on one backend, then the other, and the order flips each round. Before each timed call Ollama
 reloads the model, so no call reuses a prompt the other backend just sent. Each backend first
 ingests one untimed call, so loading WhisperX, pyannote and the embedding model in-process is
-reported as the first call and kept out of the medians. Timed calls are deleted afterwards, which
+reported as a warm-up run and kept out of the medians. Model loading is included only if the services
+were freshly restarted and have not processed any calls. Timed calls are deleted afterwards, which
 leaves the seeded corpus the read benchmark runs against.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -58,13 +60,30 @@ def package_versions(backend_dir: Path) -> dict[str, str]:
     return json.loads(raw[-1]) if raw else {}
 
 
+def source_fingerprint(root: Path = ROOT) -> str:
+    """Fingerprint application sources, including dirty changes, without secrets or generated results."""
+    paths = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "backends", "shared",
+         "frontend", "scripts", "docker-compose.yml", "pyproject.toml", "uv.lock"],
+        cwd=root, capture_output=True, check=True,
+    ).stdout.decode().split("\0")
+    digest = hashlib.sha256()
+    for relative in sorted(set(paths) - {""}):
+        path = root / relative
+        if path.is_file():
+            digest.update(relative.encode() + b"\0" + path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
 def environment(ollama_host: str, model: str) -> dict:
     tags = httpx.get(f"{ollama_host}/api/tags", timeout=10).json().get("models", [])
-    digest = next((m["digest"] for m in tags if m["name"].split(":")[0] == model.split(":")[0]), None)
+    required = model if ":" in model else f"{model}:latest"
+    digest = next((m["digest"] for m in tags if m["name"] == required), None)
     return {
         "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_commit": sh(["git", "rev-parse", "--short", "HEAD"]),
         "git_dirty": bool(sh(["git", "status", "--porcelain"])),
+        "source_fingerprint": source_fingerprint(),
         "machine": {
             "chip": sh(["sysctl", "-n", "machdep.cpu.brand_string"]) or platform.processor(),
             "cpus": int(sh(["sysctl", "-n", "hw.ncpu"]) or 0) or None,
@@ -106,7 +125,7 @@ def time_call(api: Api, entry: dict) -> dict:
 
 
 # What must match for a section measured earlier to be published beside one measured now.
-SAME_SETUP = ("git_commit", "machine", "python", "packages", "ollama")
+SAME_SETUP = ("git_commit", "source_fingerprint", "machine", "python", "packages", "ollama")
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -150,9 +169,13 @@ def main() -> int:
     parser.add_argument("--skip-pipeline", action="store_true")
     parser.add_argument("--skip-reads", action="store_true")
     args = parser.parse_args()
+    if args.rounds < 1 or args.reads < 1:
+        parser.error("--rounds and --reads must be positive")
 
     ref, pxt = backends()
     entries = [e for e in load_manifest() if not args.fixtures or e["file"] in args.fixtures]
+    if not entries:
+        parser.error("No fixtures matched --fixtures")
     previous = json.loads(OUT.read_text()) if OUT.is_file() else {}
     report = {"environment": environment(os.getenv("OLLAMA_HOST", "http://localhost:11434"), os.getenv("OLLAMA_MODEL", "llama3.1"))}
     if (args.skip_pipeline or args.skip_reads) and previous:
@@ -163,10 +186,11 @@ def main() -> int:
 
     if not args.skip_pipeline:
         smallest = min(load_manifest(), key=lambda e: (FIXTURES / e["file"]).stat().st_size)
-        # The first call after a restart loads WhisperX, pyannote and the embedding model in-process.
+        # This warms the current process state; the script does not restart services itself.
+        report["warmup_scope"] = "current service state; not a verified cold start"
         report["first_call"] = {}
         for api in (ref, pxt):
-            print(f"first call {api.name} ({smallest['file']})")
+            print(f"warm-up call {api.name} ({smallest['file']})")
             report["first_call"][api.name] = time_call(api, smallest)
         pipeline: dict[str, dict[str, list]] = {e["file"]: {"reference": [], "pixeltable": []} for e in entries}
         for round_no in range(args.rounds):

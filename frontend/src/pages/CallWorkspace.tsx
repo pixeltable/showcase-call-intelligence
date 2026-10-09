@@ -14,7 +14,8 @@ import { getProfile } from "../lib/verticals";
 export function CallWorkspace() {
   const { callId } = useParams<{ callId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTime = Number(searchParams.get("t") ?? "0");
+  const requestedTime = Number(searchParams.get("t") ?? "0");
+  const initialTime = Number.isFinite(requestedTime) && requestedTime >= 0 ? requestedTime : 0;
   const highlightSegmentId = searchParams.get("seg");
   const waveformSeekRef = useRef<(time: number) => void>(() => {});
   const videoSeekRef = useRef<(time: number) => void>(() => {});
@@ -25,7 +26,7 @@ export function CallWorkspace() {
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [videoError, setVideoError] = useState(false);
 
-  const { data: call, isLoading, error } = useQuery({
+  const { data: call, isLoading, error, refetch } = useQuery({
     queryKey: ["call", callId],
     queryFn: () => api.getCall(callId!),
     enabled: !!callId,
@@ -74,19 +75,25 @@ export function CallWorkspace() {
   if (isLoading) return <p className="p-6 text-slate-400">Loading call...</p>;
   if (!call) {
     const message = error instanceof Error ? error.message : "Failed to load call.";
-    return <p className="p-6 text-red-400">{message}</p>;
+    return (
+      <main className="space-y-4 p-6">
+        <Link to="/" className="text-indigo-300 hover:underline">Back to dashboard</Link>
+        <p role="alert" className="text-red-400">{message}</p>
+        <button type="button" onClick={() => void refetch()} className="rounded border border-slate-700 px-4 py-2">Retry loading recording</button>
+      </main>
+    );
   }
 
   const profile = getProfile(call.vertical);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-6">
+    <main className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       {error && (
         <p className="rounded border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-400">
           Refresh failed: {error instanceof Error ? error.message : "unknown error"}. Showing the last loaded state.
         </p>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link to="/" className="text-sm text-indigo-400 hover:underline">
             ← Back to dashboard
@@ -131,8 +138,8 @@ export function CallWorkspace() {
         </span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
           {call.status === "completed" ? (
             <>
               {call.has_video_source && (
@@ -204,6 +211,6 @@ export function CallWorkspace() {
 
         <IntelligenceSidebar call={call} />
       </div>
-    </div>
+    </main>
   );
 }

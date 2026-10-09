@@ -36,9 +36,9 @@ class CommentOut(BaseModel):
 class CommentCreate(BaseModel):
     call_id: uuid.UUID
     segment_id: uuid.UUID | None = None
-    start_sec: float = 0.0
+    start_sec: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     author: str = Field(min_length=1, max_length=128)
-    comment: str = Field(min_length=1)
+    comment: str = Field(min_length=1, max_length=10000)
 
 
 class CallSummary(BaseModel):

@@ -2,10 +2,10 @@
   "backends": {
     "pixeltable": {
       "app_files": 3,
-      "app_loc": 414,
+      "app_loc": 442,
       "by_concern": {
-        "Queries and HTTP": 242,
-        "Schema and pipeline": 161,
+        "Queries and HTTP": 258,
+        "Schema and pipeline": 173,
         "Settings (config.py)": 11
       },
       "classified": {
@@ -20,9 +20,9 @@
       },
       "config_loc": 20,
       "file_breakdown": {
-        "backends/pixeltable/app.py": 317,
+        "backends/pixeltable/app.py": 343,
         "backends/pixeltable/config.py": 11,
-        "backends/pixeltable/functions.py": 86
+        "backends/pixeltable/functions.py": 88
       },
       "migrations": null,
       "orchestration_hops": 13,
@@ -36,11 +36,11 @@
     },
     "reference": {
       "app_files": 24,
-      "app_loc": 1166,
+      "app_loc": 1171,
       "by_concern": {
-        "Queries and HTTP": 467,
+        "Queries and HTTP": 469,
         "Repair tooling": 187,
-        "Schema and pipeline / model and media wrappers": 172,
+        "Schema and pipeline / model and media wrappers": 175,
         "Schema and pipeline / orchestration and status": 97,
         "Schema and pipeline / schema and migrations": 211,
         "Settings (config.py)": 32
@@ -69,13 +69,13 @@
         "backends/reference/app/main.py": 26,
         "backends/reference/app/models.py": 64,
         "backends/reference/app/routers/admin.py": 34,
-        "backends/reference/app/routers/calls.py": 191,
+        "backends/reference/app/routers/calls.py": 194,
         "backends/reference/app/routers/comments.py": 38,
-        "backends/reference/app/routers/search.py": 90,
+        "backends/reference/app/routers/search.py": 93,
         "backends/reference/app/services/diarization.py": 3,
         "backends/reference/app/services/embed_service.py": 21,
-        "backends/reference/app/services/health.py": 72,
-        "backends/reference/app/services/ollama_client.py": 72,
+        "backends/reference/app/services/health.py": 68,
+        "backends/reference/app/services/ollama_client.py": 75,
         "backends/reference/app/services/storage.py": 50,
         "backends/reference/app/services/video.py": 30,
         "backends/reference/app/services/whisperx_service.py": 46,
@@ -115,10 +115,10 @@
   },
   "shared": {
     "app_files": 5,
-    "app_loc": 671,
+    "app_loc": 691,
     "file_breakdown": {
       "shared/call_center_api/constants.py": 5,
-      "shared/call_center_api/enrichment.py": 215,
+      "shared/call_center_api/enrichment.py": 235,
       "shared/call_center_api/schemas.py": 98,
       "shared/call_center_api/segmentation.py": 88,
       "shared/call_center_api/verticals.py": 265

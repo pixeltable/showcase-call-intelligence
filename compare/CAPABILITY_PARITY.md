@@ -33,4 +33,4 @@ LLM wording is not compared: it is the model's, not the backend's.
 
 ## Shared by construction
 
-Prompts, response parsers, speaker labeling, the segment transcript format and the upload rules live in [`shared/call_center_api`](../shared/call_center_api) and are imported by both. The models and their parameters are identical ([PIPELINE_SPEC.md](PIPELINE_SPEC.md)).
+Prompts, response parsers, speaker labeling, the segment transcript format and the upload rules live in [`shared/call_center_api`](../shared/call_center_api) and are imported by both. Model identifiers and intended logical parameters are shared ([PIPELINE_SPEC.md](PIPELINE_SPEC.md)); execution-device and index-precision differences are explicit [methodology limits](METHODOLOGY.md#what-is-compared).

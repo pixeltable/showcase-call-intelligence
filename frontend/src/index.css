@@ -2,4 +2,42 @@
 
 body {
   @apply bg-slate-950 text-slate-100 min-h-screen;
+  color-scheme: dark;
+}
+
+::selection {
+  @apply bg-indigo-300 text-indigo-950;
+}
+
+:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 3px;
+}
+
+input, textarea {
+  caret-color: #a5b4fc;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #94a3b8;
+}
+
+button, input:not([type="file"]), select {
+  min-height: 44px;
+}
+
+textarea, td, p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transition {
+    transition: none;
+  }
 }

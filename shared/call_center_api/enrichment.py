@@ -6,6 +6,7 @@ System prompts live in call_center_api.verticals per vertical profile.
 from __future__ import annotations
 
 import json
+import math
 import re
 from typing import Any
 
@@ -96,7 +97,7 @@ def parse_summary(raw: str) -> list[str]:
     """Parse summary model output into clean bullet strings."""
     text = (raw or "").strip()
     if not text:
-        return []
+        raise ValueError("Summary response is empty")
 
     json_text = extract_json(text)
     if json_text:
@@ -108,9 +109,17 @@ def parse_summary(raw: str) -> list[str]:
             for key in ("bullets", "summary", "points"):
                 value = parsed.get(key)
                 if isinstance(value, list):
-                    return [_strip_markdown(str(item)) for item in value if str(item).strip()]
-        if isinstance(parsed, list):
-            return [_strip_markdown(str(item)) for item in parsed if str(item).strip()]
+                    items = value
+                    break
+            else:
+                raise ValueError("Summary response must contain an array of strings")
+        elif isinstance(parsed, list):
+            items = parsed
+        else:
+            raise ValueError("Summary response must be an object or an array of strings")
+        if not items or any(not isinstance(item, str) or not _strip_markdown(item) for item in items):
+            raise ValueError("Summary bullets must be nonempty strings")
+        return [_strip_markdown(item) for item in items]
 
     bullets = _parse_markdown_bullets(text)
     if bullets:
@@ -135,45 +144,54 @@ def summary_lines(summary: str | None) -> list[str]:
 def parse_action_items(raw: str) -> list[str]:
     text = (raw or "").strip()
     if not text:
-        return []
+        raise ValueError("Action items response is empty")
 
     json_text = extract_json(text) or text
     try:
         parsed = json.loads(json_text)
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as exc:
+        raise ValueError("Action items response is not valid JSON") from exc
 
     if isinstance(parsed, list):
-        return [str(item).strip() for item in parsed if str(item).strip()]
-    if isinstance(parsed, dict):
+        items = parsed
+    elif isinstance(parsed, dict):
         for key in ("actionItems", "action_items", "items"):
             value = parsed.get(key)
             if isinstance(value, list):
-                return [str(item).strip() for item in value if str(item).strip()]
-    return []
+                items = value
+                break
+        else:
+            raise ValueError("Action items response must contain an array of strings")
+    else:
+        raise ValueError("Action items response must be an array of strings")
+    if any(not isinstance(item, str) or not item.strip() for item in items):
+        raise ValueError("Action items must be nonempty strings")
+    return [item.strip() for item in items]
 
 
-def _clamp_score(value: Any, default: float = 0.0) -> float:
+def _clamp_score(value: Any) -> float:
     try:
         score = float(value)
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError) as exc:
+        raise ValueError("QA scores must be numeric") from exc
+    if isinstance(value, bool) or not math.isfinite(score):
+        raise ValueError("QA scores must be finite numbers")
     return max(0.0, min(10.0, score))
 
 
 def parse_qa_scorecard(raw: str) -> dict[str, Any]:
     text = (raw or "").strip()
     if not text:
-        return dict(EMPTY_QA)
+        raise ValueError("QA response is empty")
 
     json_text = extract_json(text) or text
     try:
         parsed = json.loads(json_text)
-    except json.JSONDecodeError:
-        return dict(EMPTY_QA)
+    except json.JSONDecodeError as exc:
+        raise ValueError("QA response is not valid JSON") from exc
 
     if not isinstance(parsed, dict):
-        return dict(EMPTY_QA)
+        raise ValueError("QA response must be an object")
 
     return {
         "empathy": _clamp_score(parsed.get("empathy")),
@@ -237,25 +255,27 @@ def has_negative_sentiment_moments(sentiment: dict[str, Any] | None) -> bool:
 def parse_sentiment(raw: str) -> dict[str, Any]:
     text = (raw or "").strip()
     if not text:
-        return dict(EMPTY_SENTIMENT)
+        raise ValueError("Sentiment response is empty")
 
     json_text = extract_json(text) or text
     try:
         parsed = json.loads(json_text)
-    except json.JSONDecodeError:
-        return dict(EMPTY_SENTIMENT)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Sentiment response is not valid JSON") from exc
 
     if not isinstance(parsed, dict):
-        return dict(EMPTY_SENTIMENT)
+        raise ValueError("Sentiment response must be an object")
 
     label = str(parsed.get("label", "unknown")).lower()
     if label not in _VALID_LABELS:
-        label = "unknown"
+        raise ValueError("Sentiment label must be positive, neutral, or negative")
 
     try:
-        score = float(parsed.get("score", 0.5))
-    except (TypeError, ValueError):
-        score = 0.5
+        score = float(parsed.get("score"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Sentiment score must be numeric") from exc
+    if isinstance(parsed.get("score"), bool) or not math.isfinite(score):
+        raise ValueError("Sentiment score must be a finite number")
     score = max(0.0, min(1.0, score))
 
     moments = _normalize_moments(parsed.get("moments"))

@@ -43,6 +43,7 @@ export function WaveformPlayer({
   const [isReady, setIsReady] = useState(false);
   const [duration, setDuration] = useState(0);
   const [displayTime, setDisplayTime] = useState(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   useEffect(() => {
     onReadyRef.current = onReady;
@@ -51,6 +52,7 @@ export function WaveformPlayer({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    setPlaybackError(null);
 
     const regionsPlugin = RegionsPlugin.create();
     regionsRef.current = regionsPlugin;
@@ -63,6 +65,8 @@ export function WaveformPlayer({
       url: audioUrl,
       plugins: [regionsPlugin],
     });
+
+    ws.on("error", () => setPlaybackError("Audio could not be loaded. Refresh this recording to try again."));
 
     if (drivePlayback) {
       ws.on("timeupdate", (time) => {
@@ -81,9 +85,12 @@ export function WaveformPlayer({
       setDuration(ws.getDuration());
       setDisplayTime(ws.getCurrentTime());
       setIsReady(true);
-      const seek = (time: number) => ws.setTime(time);
+      const seek = (time: number) => {
+        if (Number.isFinite(time)) ws.setTime(Math.max(0, Math.min(time, ws.getDuration())));
+      };
       const playClip = (startSec: number, endSec: number) => {
-        void ws.play(startSec, endSec);
+        setPlaybackError(null);
+        void ws.play(startSec, endSec).catch(() => setPlaybackError("Playback could not start. Press Play to try again."));
       };
       onReadyRef.current?.(seek, playClip);
     });
@@ -116,12 +123,12 @@ export function WaveformPlayer({
 
   useEffect(() => {
     const ws = wsRef.current;
-    if (!ws) return;
+    if (!ws || !isReady || !Number.isFinite(currentTime)) return;
     if (Math.abs(ws.getCurrentTime() - currentTime) > 0.3) {
       ws.setTime(currentTime);
       if (drivePlayback) setDisplayTime(currentTime);
     }
-  }, [currentTime, drivePlayback]);
+  }, [currentTime, drivePlayback, isReady]);
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-950 p-2">
@@ -130,8 +137,12 @@ export function WaveformPlayer({
           <button
             type="button"
             aria-label={isPlaying ? "Pause" : "Play"}
-            onClick={() => wsRef.current?.playPause()}
-            className="rounded bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-500"
+            disabled={!isReady}
+            onClick={() => {
+              setPlaybackError(null);
+              void wsRef.current?.playPause().catch(() => setPlaybackError("Playback could not start. Press Play to try again."));
+            }}
+            className="rounded bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
             {isPlaying ? "Pause" : "Play"}
           </button>
@@ -141,6 +152,7 @@ export function WaveformPlayer({
         </div>
       )}
       <div ref={containerRef} />
+      {playbackError && <p role="alert" className="mt-2 text-sm text-red-400">{playbackError}</p>}
       {regions.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-3 px-1 text-xs text-slate-400">
           {(Object.keys(SENTIMENT_REGION_COLORS) as Array<keyof typeof SENTIMENT_REGION_COLORS>).map((key) => (

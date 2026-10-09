@@ -29,8 +29,8 @@ export function CoachingComments({ call, selectedSegment }: Props) {
       call_id: call.id,
       segment_id: selectedSegment?.id,
       start_sec: selectedSegment?.start_sec ?? 0,
-      author,
-      comment,
+      author: author.trim(),
+      comment: comment.trim(),
     });
   }
 
@@ -55,12 +55,18 @@ export function CoachingComments({ call, selectedSegment }: Props) {
       </ul>
       <form onSubmit={onSubmit} className="mt-3 space-y-2">
         <input
+          aria-label="Comment author"
+          required
+          maxLength={128}
           value={author}
           onChange={(e) => setAuthor(e.target.value)}
           className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
           placeholder="Author"
         />
         <textarea
+          aria-label="Coaching comment"
+          required
+          maxLength={10000}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           rows={3}
@@ -69,13 +75,13 @@ export function CoachingComments({ call, selectedSegment }: Props) {
         />
         <button
           type="submit"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || !comment.trim() || !author.trim()}
           className="rounded bg-indigo-600 px-3 py-1.5 text-sm hover:bg-indigo-500 disabled:opacity-50"
         >
           {mutation.isPending ? "Saving..." : "Add Comment"}
         </button>
         {mutation.isError && (
-          <p className="text-sm text-red-400">
+          <p role="alert" className="text-sm text-red-400">
             {mutation.error instanceof Error ? mutation.error.message : "Failed to save comment."}
           </p>
         )}

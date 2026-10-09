@@ -72,6 +72,16 @@ export interface SearchHit {
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed"]);
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
@@ -87,7 +97,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* use raw text */
     }
-    throw new Error(message);
+    throw new ApiError(message || `Request failed (${res.status}).`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json();

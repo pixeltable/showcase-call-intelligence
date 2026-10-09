@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -53,10 +53,12 @@ def _search_hit(
 def search_transcripts(
     q: str = Query(min_length=1, max_length=500),
     mode: str = Query(default="hybrid", pattern="^(keyword|semantic|hybrid)$"),
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     query = q.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="Search query must contain non-whitespace text")
     hits: list[SearchHit] = []
     seen: set[tuple[str, str]] = set()
 
@@ -102,6 +104,7 @@ def search_transcripts(
                 seen.add(key)
                 hits.append(_search_hit(segment, call, score=1.0 - float(dist), match_type="semantic"))
         except Exception as exc:
-            logger.warning("Semantic search failed for query=%r: %s", query, exc)
+            logger.warning("Semantic search failed: %s", exc)
+            raise HTTPException(status_code=503, detail="Semantic search is unavailable; try keyword mode") from exc
 
     return hits[:limit]

@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TERMINAL_STATUSES, api } from "../api/client";
+import { ApiError, TERMINAL_STATUSES, api } from "../api/client";
 import { getProfile } from "../lib/verticals";
 
 const POLL_MS = 3000;
@@ -22,7 +22,8 @@ interface Props {
 }
 
 export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds, onSettled }: Props) {
-  const { data: calls = [], isLoading, isError, error } = useQuery({
+  const [missingIds, setMissingIds] = useState<string[]>([]);
+  const { data: calls = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["calls", sentimentFilter, queueFilter],
     queryFn: () =>
       api.listCalls({
@@ -39,9 +40,15 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
     queries: pendingIds.map((id) => ({ queryKey: ["pending-call", id], queryFn: () => api.getCall(id), refetchInterval: POLL_MS })),
   });
   useEffect(() => {
+    const missing = pendingIds.filter((_, i) => {
+      const error = pending[i]?.error;
+      return error instanceof ApiError && error.status === 404;
+    });
+    if (missing.length > 0) setMissingIds((ids) => [...new Set([...ids, ...missing])]);
     const done = pendingIds.filter((_, i) => {
       const q = pending[i];
-      return q?.isError || (q?.data !== undefined && TERMINAL_STATUSES.has(q.data.status));
+      return (q?.error instanceof ApiError && q.error.status === 404)
+        || (q?.data !== undefined && TERMINAL_STATUSES.has(q.data.status));
     });
     if (done.length === 0) return;
     onSettled(done);
@@ -50,22 +57,32 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
 
   const headerLabels = getProfile(calls[0]?.vertical).labels;
   const waiting = pendingIds.filter((id) => !calls.some((c) => c.id === id)).length;
+  const unavailable = pending.filter((q) => q.isError).length;
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
       {isError && (
-        <p className="border-b border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-400">
+        <p role="alert" className="border-b border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-400">
           {error instanceof Error ? error.message : "Failed to load recordings."}
+          {" "}<button type="button" onClick={() => void refetch()} className="underline underline-offset-4">Retry loading recordings</button>
         </p>
       )}
+      {unavailable > 0 && (
+        <p role="status" className="px-3 py-2 text-sm text-amber-200">Unable to check an upload. Retrying the connection...</p>
+      )}
+      {missingIds.length > 0 && (
+        <p role="alert" className="px-3 py-2 text-sm text-amber-200">An accepted upload could not be found. The service may have restarted before saving it. Upload the recording again.</p>
+      )}
       {waiting > 0 && (
-        <p className="border-b border-slate-800 px-3 py-2 text-sm text-slate-400">
+        <p role="status" className="border-b border-slate-800 px-3 py-2 text-sm text-slate-400">
           {waiting} upload{waiting > 1 ? "s" : ""} processing. {waiting > 1 ? "They appear" : "It appears"} here when
           the backend lists {waiting > 1 ? "them" : "it"}.
         </p>
       )}
       {isLoading && <p className="px-3 py-4 text-center text-sm text-slate-400">Loading recordings...</p>}
-      <table className="min-w-full text-sm">
+      <div className="overflow-x-auto" role="region" aria-label="Recording list" tabIndex={0}>
+      <table className="min-w-[1000px] w-full text-sm">
+        <caption className="sr-only">Recordings and processing status. Open a recording to review its transcript and intelligence.</caption>
         <thead className="bg-slate-900 text-left text-xs uppercase text-slate-400">
           <tr>
             <th className="px-3 py-2">Date</th>
@@ -83,10 +100,13 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
           {calls.map((call) => (
             <tr
               key={call.id}
-              onClick={() => onSelect(call.id)}
-              className="cursor-pointer border-t border-slate-800 hover:bg-slate-800/50"
+              className="border-t border-slate-800 hover:bg-slate-800/50"
             >
-              <td className="px-3 py-2">{new Date(call.call_date).toLocaleString()}</td>
+              <td className="px-3 py-2">
+                <button type="button" onClick={() => onSelect(call.id)} className="text-left text-indigo-300 hover:underline" aria-label={`Open recording by ${call.agent_id} from ${new Date(call.call_date).toLocaleString()}`}>
+                  {new Date(call.call_date).toLocaleString()}
+                </button>
+              </td>
               <td className="px-3 py-2">
                 <span className="rounded bg-slate-800 px-2 py-0.5 text-xs">{getProfile(call.vertical).displayName}</span>
               </td>
@@ -106,12 +126,13 @@ export function CallRoster({ onSelect, sentimentFilter, queueFilter, pendingIds,
           {calls.length === 0 && !isLoading && !isError && (
             <tr>
               <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
-                No recordings yet. Upload one to get started.
+                {sentimentFilter || queueFilter ? "No recordings match these filters. Try another sentiment or queue." : "No recordings yet. Upload one to get started."}
               </td>
             </tr>
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

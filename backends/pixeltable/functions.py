@@ -82,6 +82,8 @@ def parse_sentiment_content(transcript: str | None, raw: str | None) -> dict:
 
 @pxt.udf
 def parse_category_content(transcript: str | None, raw: str | None) -> str:
+    if transcript and not (raw or "").strip():
+        raise ValueError("Category response is empty")
     return normalize_category(raw or "") if transcript else "Uncategorized"
 
 

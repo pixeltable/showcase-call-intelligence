@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   videoUrl: string;
@@ -19,6 +19,7 @@ export function VideoPlayer({
   const clipEndRef = useRef<number | null>(null);
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onReadyRef = useRef(onReady);
+  const [playbackError, setPlaybackError] = useState(false);
 
   useEffect(() => {
     onTimeUpdateRef.current = onTimeUpdate;
@@ -43,7 +44,8 @@ export function VideoPlayer({
     const playClip = (startSec: number, endSec: number) => {
       clipEndRef.current = endSec;
       seek(startSec);
-      void video.play();
+      setPlaybackError(false);
+      void video.play().catch(() => setPlaybackError(true));
     };
 
     onReadyRef.current?.(seek, playClip);
@@ -65,18 +67,22 @@ export function VideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (Math.abs(video.currentTime - currentTime) > 0.3) {
+    if (Number.isFinite(currentTime) && video.readyState >= HTMLMediaElement.HAVE_METADATA && Math.abs(video.currentTime - currentTime) > 0.3) {
       video.currentTime = currentTime;
     }
   }, [currentTime]);
 
   return (
+    <>
     <video
       ref={videoRef}
       controls
       className="max-h-80 w-full rounded bg-black"
       src={videoUrl}
       onError={onError}
+      onPlay={() => setPlaybackError(false)}
     />
+    {playbackError && <p role="alert" className="mt-2 text-sm text-amber-200">Playback could not start. Use the video Play control to try again.</p>}
+    </>
   );
 }

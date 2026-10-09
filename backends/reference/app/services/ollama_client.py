@@ -73,7 +73,10 @@ class OllamaClient:
 
         action_items = parse_action_items(self.chat(prompts.action_items, transcript, json_mode=True))
         sentiment = parse_sentiment(self.chat(prompts.sentiment, transcript, json_mode=True))
-        category = normalize_category(self.chat(prompts.category, transcript))
+        category_raw = self.chat(prompts.category, transcript)
+        if not category_raw.strip():
+            raise ValueError("Category response is empty")
+        category = normalize_category(category_raw)
         qa_scorecard = parse_qa_scorecard(self.chat(prompts.qa, transcript, json_mode=True))
 
         return LlmResult(

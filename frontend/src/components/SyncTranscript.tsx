@@ -42,7 +42,7 @@ export function SyncTranscript({
     if (!box || !el) return;
     const top = el.offsetTop;
     if (top < box.scrollTop || top + el.offsetHeight > box.scrollTop + box.clientHeight) {
-      box.scrollTo({ top: Math.max(0, top - 8), behavior: "smooth" });
+      box.scrollTo({ top: Math.max(0, top - 8), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     }
   }, [activeSegmentId, highlightSegmentId]);
 
@@ -69,12 +69,13 @@ export function SyncTranscript({
               onSelectSegment(seg);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
                 onSeek(seg.start_sec, seg.id);
                 onSelectSegment(seg);
               }
             }}
-            className={`cursor-pointer rounded-lg border border-l-4 px-3 py-2 transition ${speakerColor(seg.speaker)} ${sentimentBorder} ${
+            className={`cursor-pointer rounded-lg border px-3 py-2 transition ${speakerColor(seg.speaker)} ${sentimentBorder} ${
               highlighted ? "ring-2 ring-amber-400" : active ? "ring-2 ring-indigo-400" : ""
             }`}
           >

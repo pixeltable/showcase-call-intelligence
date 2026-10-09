@@ -19,8 +19,26 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-      - run: uv sync
+      - run: uv sync --frozen
       - run: uv run --with pytest python -m pytest tests -q
+
+  reference-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backends/reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            backends/reference/uv.lock
+            shared/uv.lock
+      - run: uv sync --frozen
+      - run: uv run --frozen --with pytest python -m pytest tests/test_contract.py -q
 
   results-are-current:
     # The docs quote compare/results/*.json; these fail if a number or chart drifts from its source.

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -58,12 +59,14 @@ def _to_summary(call: Call) -> CallSummary:
 def upload_call(
     audio: UploadFile = File(...),
     call_date: datetime = Form(...),
-    agent_id: str = Form(...),
-    customer_id: str = Form(...),
-    queue: str = Form(...),
+    agent_id: str = Form(..., min_length=1, max_length=128),
+    customer_id: str = Form(..., min_length=1, max_length=128),
+    queue: str = Form(..., min_length=1, max_length=128),
     vertical: str = Form(default="call_center"),
     db: Session = Depends(get_db),
 ):
+    if call_date.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="call_date must include a timezone offset")
     call_id = uuid.uuid4()
     try:
         audio_path, original_filename, video_path, media_type = save_upload(audio, call_id)
@@ -97,7 +100,7 @@ def list_calls(
     queue: str | None = None,
     sentiment_label: str | None = None,
     min_handle_time: float | None = None,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
     q = db.query(Call)
@@ -136,8 +139,8 @@ def get_kpis(db: Session = Depends(get_db)):
 
 
 @router.get("/flagged", response_model=list[CallSummary])
-def flagged_calls(limit: int = 50, db: Session = Depends(get_db)):
-    calls = db.query(Call).filter(Call.status == "completed").order_by(Call.call_date.desc()).limit(200).all()
+def flagged_calls(limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)):
+    calls = db.query(Call).filter(Call.status == "completed").order_by(Call.call_date.desc()).yield_per(100)
     flagged: list[CallSummary] = []
     for call in calls:
         label, score = _sentiment_fields(call)
@@ -197,7 +200,7 @@ def get_call_audio(call_id: uuid.UUID, db: Session = Depends(get_db)):
     path = resolve_upload_file(call.audio_path)
     if path is None:
         raise HTTPException(status_code=404, detail="Audio file not found")
-    return FileResponse(path, filename=safe_download_name(call.original_filename, path.name))
+    return FileResponse(path, filename=safe_download_name(f"{Path(call.original_filename).stem}{path.suffix}", path.name))
 
 
 @router.get("/{call_id}/video")

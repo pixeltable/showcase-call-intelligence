@@ -13,26 +13,29 @@ Ten recordings in [`fixtures/manifest.json`](fixtures/manifest.json), five audio
 | podcast | podcast-excerpt-audio (extract) | lex-fridman-excerpt, travel-briefing |
 | interview | interview-behavioral | interview-session (copy) |
 
-## Models (identical on both)
+## Shared model identifiers and logical parameters
 
 | Variable | Default | Used for |
 |---|---|---|
-| `WHISPERX_MODEL` | `base` | ASR, CPU, `int8`, batch 16 |
+| `WHISPERX_MODEL` | `base` | ASR, batch 16; device/precision selection differs as described below |
 | `WHISPERX_DIARIZATION_MODEL` | `pyannote/speaker-diarization-3.1` | diarization, `num_speakers=2` (needs `HF_TOKEN`) |
 | `OLLAMA_MODEL` | `llama3.1` | the five enrichments, through one Ollama server |
 | `EMBED_MODEL` | `all-mpnet-base-v2` | 768-dim segment embeddings, normalized |
 
 The Reference's [`whisperx_service.py`](../backends/reference/app/services/whisperx_service.py) runs the same steps as Pixeltable's `whisperx.transcribe` UDF: load, transcribe, align, diarize, assign speakers.
 
+The Reference explicitly uses CPU and `int8` ASR. Pixeltable's provider wrappers can select available accelerators, and vector-index precision can also differ. Model identifiers and intended logical parameters are shared; identical execution devices/precision are not established by these declarations. See the [methodology's device-selection boundary](METHODOLOGY.md#what-is-compared).
+
 ## Ingest
 
 - Audio: `.wav .mp3 .m4a .ogg .flac .webm`. Video: `.mp4 .mov .mkv`. Anything else is a 400. Uploads over `MAX_UPLOAD_MB` are a 400.
 - `POST /api/calls/upload` returns `202 {id, status}` before any processing.
+- `call_date` includes a timezone offset. Agent, customer, and queue fields are nonempty and bounded to the Reference schema's string sizes. List/flagged limits are positive and bounded; search limits are positive and bounded more tightly. Invalid request values return 422.
 - Video: extract MP3 audio (Pixeltable: the `extracted_audio` computed column; Reference: ffmpeg in the Celery task), then transcribe it.
 
 ## Segments and transcript
 
-From WhisperX `segments`: the first distinct speaker is `AGENT`, the second `CUSTOMER`; with one speaker, a regex on greeting and complaint phrases decides, else the index alternates. Empty segments are dropped. Shared code: [`segmentation.py`](../shared/call_center_api/segmentation.py). The LLM sees one line per segment:
+From WhisperX `segments`: the first distinct speaker is `AGENT`, the second `CUSTOMER`; with one speaker, greeting and complaint regexes decide, otherwise the first segment is labeled `AGENT` and later segments `CUSTOMER`. These are demo role heuristics, not speaker-identity ground truth. Empty segments are dropped. Shared code: [`segmentation.py`](../shared/call_center_api/segmentation.py). The LLM sees one line per segment:
 
 ```
 [{start:.1f}s-{end:.1f}s] {SPEAKER}: {text}
@@ -49,6 +52,8 @@ Five Ollama chat calls per call, system prompt from `get_profile(vertical).promp
 | sentiment | yes | `{label, score, rationale, moments[]}`; a moment is `{start_sec, end_sec?, polarity, reason}` |
 | category | no | one label |
 | qa_scorecard | yes | `{empathy, resolution, compliance, overall, notes}`, scores clamped to 0-10 |
+
+Malformed model output is a failure, not a successful empty action list or a zero scorecard. Required JSON shapes and finite numeric scores are validated in the shared parsers; valid empty action arrays are allowed. Summary parsing supports the existing Markdown/plain-text fallback, but JSON with an invalid summary shape raises. An empty category response raises when a transcript exists.
 
 **No speech:** neither backend calls the LLM. The Reference checks the transcript in Python. On Pixeltable the transcript is null, and a null argument to a non-nullable UDF parameter skips the call, so all five cells skip. Both store the same defaults:
 
@@ -68,13 +73,15 @@ Five Ollama chat calls per call, system prompt from `get_profile(vertical).promp
 | Reference | `queued`, `transcribing`, `diarizing`, `enriching`, `embedding`, then `completed` or `failed`. The Celery task commits each stage, and the roster lists the call from the start. |
 | Pixeltable | `processing`, then `completed` or `failed`. A row commits only when every computed column, its segment rows and their embeddings are done, so there is no stage to report and the roster lists the call once it is done. The detail route answers `processing` from the upload it accepted. |
 
-`failed` on Pixeltable means a cell holds an error (`errormsg`); a failed cell also fails every column computed from it, and the other cells keep their values. On the Reference, `failed` means the task raised; stages already committed stay.
+`failed` on Pixeltable means an input media or stored call-transform cell holds an error (`errormsg`); a failed cell also fails every column computed from it, and the other cells keep their values. Its `completed` status does not establish segment embedding readiness: the implicit embedding index has separate failures. Inserts log `UpdateStatus` errors, and the public `pxt.get_dir_tree()` reports historical operation error counts. On the Reference, `failed` means the task raised; stages already committed stay.
 
 ## Embeddings and search
 
 One vector per segment. Reference: `SentenceTransformer.encode` into a `vector(768)` column with an HNSW index, and the query is embedded by hand. Pixeltable: `EmbeddingIndex(text, embedding=sentence_transformer.using(...))` on the `transcript_segments` view, maintained on insert and delete; `similarity(string=q)` embeds the query with the same model.
 
 `GET /api/search?q&mode=keyword|semantic|hybrid&limit`: keyword hits (case-insensitive substring, newest first, `score` 1.0) then semantic hits not already returned (`score` is cosine similarity), from calls that completed without errors.
+
+Whitespace-only queries return 422. Query-embedding or semantic-query failures return 503 with a keyword-mode fallback instruction, rather than looking like an empty result. Missing segment vectors are omitted from semantic results; the Pixeltable API currently does not expose a persistent per-call index-readiness field.
 
 ## Media
 

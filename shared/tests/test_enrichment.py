@@ -1,5 +1,7 @@
 """Tests for shared enrichment parsers."""
 
+import pytest
+
 from call_center_api.enrichment import (
     format_summary,
     has_negative_sentiment_moments,
@@ -87,3 +89,39 @@ def test_normalize_category() -> None:
 
 def test_summary_lines() -> None:
     assert summary_lines("a\n\nb") == ["a", "b"]
+
+
+@pytest.mark.parametrize("parser", [parse_summary, parse_action_items, parse_qa_scorecard, parse_sentiment])
+def test_empty_model_output_is_a_failure(parser) -> None:
+    with pytest.raises(ValueError):
+        parser("")
+
+
+@pytest.mark.parametrize("raw", ['{"unrelated": []}', '"not an array"', '[1]', '[" "]', "not json"])
+def test_malformed_action_items_are_not_successful_empty_results(raw: str) -> None:
+    with pytest.raises(ValueError):
+        parse_action_items(raw)
+
+
+def test_valid_empty_action_items_remain_valid() -> None:
+    assert parse_action_items("[]") == []
+
+
+@pytest.mark.parametrize("raw", ["{}", '"a scalar"', '{"bullets": []}', '{"bullets": [null, 3, {"x": 1}]}'])
+def test_wrong_summary_shape_is_not_stringified_as_a_success(raw: str) -> None:
+    with pytest.raises(ValueError):
+        parse_summary(raw)
+
+
+@pytest.mark.parametrize("raw", ["not json", "[]", '{"overall": 5}', '{"empathy": "NaN"}', '{"empathy": true}'])
+def test_invalid_qa_output_is_not_a_zero_scorecard(raw: str) -> None:
+    with pytest.raises(ValueError):
+        parse_qa_scorecard(raw)
+
+
+@pytest.mark.parametrize("raw", ["not json", "[]", '{"label": "unknown", "score": 0.5}',
+                                 '{"label": "neutral"}', '{"label": "neutral", "score": "NaN"}',
+                                 '{"label": "neutral", "score": true}'])
+def test_invalid_sentiment_output_is_not_a_successful_default(raw: str) -> None:
+    with pytest.raises(ValueError):
+        parse_sentiment(raw)

@@ -11,7 +11,7 @@ Both serve the same React UI and REST contract, use the same models and fixtures
 - **Verify without model downloads:** [run the deterministic backend tests](#verify-the-backend-without-models).
 - **Evaluate:** read the [methodology](compare/METHODOLOGY.md), [pipeline specification](compare/PIPELINE_SPEC.md), and [review with validation boundaries](docs/REVIEW.md).
 
-The current backend targets [Pixeltable **0.7.15**](https://pypi.org/project/pixeltable/0.7.15/), the latest stable PyPI release verified on October 8, 2026. Published latency and evolution measurements below retain their original **0.7.11** environment; they are historical results, not fresh measurements of the upgraded code.
+The current backend targets [Pixeltable **0.7.16**](https://pypi.org/project/pixeltable/0.7.16/), the latest stable PyPI release verified on October 9, 2026. Published latency and evolution measurements below retain their original **0.7.11** environment; they are historical results, not fresh measurements of the upgraded code.
 
 Speaker roles, sentiment, and QA scores are illustrative model outputs. Role labels use a first-speaker heuristic, and the fixtures include synthetic calls and repeated video excerpts. These fixtures validate software behavior; they do not establish ASR accuracy, diarization accuracy, or business decision quality.
 
@@ -19,7 +19,7 @@ Speaker roles, sentiment, and QA scores are illustrative model outputs. Role lab
 
 Start with one six-second billing fixture on the Pixeltable backend. The **core** profile stores the transcript and summary, indexes segments, and keeps comments anchored to source evidence. Category, action items, sentiment, and QA are **not requested** and remain null. The UI leads with the summary and evidence; optional assessments belong to the full profile. Upload metadata has editable demo defaults under a disclosure, so it remains easy to see what is fixture data.
 
-Prerequisites for real local models: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. For a first integration check without model downloads or provider tokens, use the [deterministic tests](#verify-the-backend-without-models).
+Prerequisites for real local models: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with access to [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) and its gated [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) dependency. Give Docker enough memory for the local model alongside your other containers; the live check below failed with a shared 8 GB VM. For a first integration check without model downloads or provider tokens, use the [deterministic tests](#verify-the-backend-without-models).
 
 ```bash
 git clone https://github.com/pixeltable/showcase-call-intelligence.git && cd showcase-call-intelligence
@@ -271,7 +271,7 @@ Every number above is written into this file by `render_results.py` from [`compa
 Apple M4 Pro, 14 cores, 48 GB, Darwin 26.6.1; Python 3.12.7; Pixeltable 0.7.11, WhisperX 3.8.6, torch 2.8.0; Ollama 0.31.1 serving `llama3.1` (46e0c10c039e) in Docker (4 cpus, 8307830784 bytes). Pipeline measured 2026-09-28T20:34:30+00:00, reads 2026-09-28T22:24:37+00:00, at `b37a52a` with local changes.
 <!-- /results:environment -->
 
-Evolution runs write new reports under `compare/reports/evolve/`, with setup identity and explicit status per attempted experiment. Partial and failed runs never relabel or replace the published `evolve.json`. Publishing new results requires an intentional review of a complete compatible run.
+Timing runs write new reports under `compare/reports/benchmark/`; `--output` selects a new file and refuses existing files before provider work. Partial timing runs contain only their current measurements. Evolution runs write new reports under `compare/reports/evolve/`, with setup identity and explicit status per attempted experiment. Partial and failed runs never relabel or replace the published `evolve.json`. Publishing new results requires an intentional review of a complete compatible run.
 
 Source counts are refreshed when code changes. Runtime measurements require a fresh full run on both stacks before making a claim about the current release. The benchmark warms whichever service processes are already running; it does not prove a cold start. It verifies Ollama cache reset and fingerprints application source to avoid combining measurements from different dirty checkouts.
 
@@ -284,7 +284,7 @@ On Pixeltable, `completed` describes the stored call transforms. Semantic-index 
 ## Troubleshooting
 
 - `curl -s localhost:8001/api/health` and `localhost:8000/api/health` list each dependency. `degraded` usually means the Ollama model is missing: pull it with `docker compose exec ollama ollama pull llama3.1`, not a host `ollama pull`.
-- LLM calls failing with `500 Internal Server Error`: Ollama's model runner was killed for memory. `llama3.1` needs about 5 GB inside Docker Desktop's VM even with the 8-bit KV cache `docker-compose.yml` sets, and other containers in the VM can push it out. Its prompt cache also grows with each new recording; `docker compose restart ollama` empties it, and the scripts reload the model before each call for the same reason. Give Docker more memory, stop other containers, or set `OLLAMA_MODEL` to a smaller model in `.env` and re-seed.
+- LLM calls failing with `500 Internal Server Error`: Ollama's model runner can be killed for memory. The October 9 live check failed twice while loading `llama3.1` in a shared 7.74 GiB Docker VM, including a summary-only retry with no prompt cache. Increase Docker memory (12 GB is a starting allocation, not a validated minimum) or deliberately select a smaller model. Restarting or stopping unrelated containers is not part of the lesson. After fixing the runtime, recompute only failed summary cells; inspect `num_excs` and the call's status rather than relying on the recompute command's exit code. See the [live validation record](docs/validation/2026-10-09.json).
 - `pxt` says the configuration changed since the daemon started: `.env` changed. `run_compare.sh` restarts the daemon; by hand, `pxt daemon restart`.
 - After pulling schema changes, `./scripts/run_compare.sh seed` resets both stores.
 - `run_compare.sh` gives the pxt daemon its own port (`PXT_PORT`, default 22090), because `pxt` replaces a daemon that serves another project on its port.

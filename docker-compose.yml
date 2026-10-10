@@ -28,7 +28,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     environment:
-      # llama3.1 needs about 5.5 GB on CPU; an 8-bit KV cache leaves room in Docker Desktop's default 8 GB VM.
+      # The 8-bit KV cache reduces inference memory; allow extra Docker memory for model loading.
       OLLAMA_FLASH_ATTENTION: "1"
       OLLAMA_KV_CACHE_TYPE: q8_0
     ports:

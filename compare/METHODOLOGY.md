@@ -19,11 +19,13 @@ Device selection is a separate limit. The Reference explicitly chooses CPU for A
 |---|---|---|
 | Code | [`scripts/metrics.py`](../scripts/metrics.py): non-blank lines that are not comments or docstrings, per backend directory; tests and lock files excluded; the shared package counted once and charged to neither. Architecture counts are regexes over that code, listed in `PATTERNS`; a count with no pattern for a backend is `n/a`. | [`results/metrics.json`](results/metrics.json) |
 | Correctness | [`compare_parity.py`](../scripts/compare_parity.py) on the seeded fixtures; [`compare_mutations.py`](../scripts/compare_mutations.py) on fresh uploads, checking each store directly after delete. | `reports/` (gitignored) |
-| Pipeline time | [`benchmark.py`](../scripts/benchmark.py): upload to `completed`, polled every 0.5 s; one call in flight; every fixture on one backend then the other, order flipped each round; median of the rounds. Before each call Ollama reloads the model, untimed. One initial call per backend is reported as a warm-up of the current service state, without a verified cold-start guarantee. | [`results/benchmarks.json`](results/benchmarks.json) |
+| Pipeline time | [`benchmark.py`](../scripts/benchmark.py): upload to `completed`, polled every 0.5 s; one call in flight; every fixture on one backend then the other, order flipped each round; median of the rounds. Before each call Ollama reloads the model, untimed. One initial call per backend is reported as a warm-up of the current service state, without a verified cold-start guarantee. | New invocations: `reports/benchmark/`; historical publication: [`results/benchmarks.json`](results/benchmarks.json) |
 | Read latency | same script: 5 warm-up then 50 requests per endpoint per backend, interleaved, over the seeded corpus; p50 and p95. | same |
 | Change cost | [`bench_evolve.py`](../scripts/bench_evolve.py) applies each patch in [`evolve/`](evolve/), runs the operator steps, verifies over HTTP, and reverts. Lines are counted the way `metrics.py` counts code. Each new invocation records its own setup, fixture/patch hashes, experiment status, and timestamps under `reports/evolve/`; it never merges or overwrites published measurements. | Historical publication: [`results/evolve.json`](results/evolve.json) |
 
 `CLASSIFIED` in `metrics.py` holds what no regex derives (processes to run, whether a new column backfills existing rows, whether progress is visible), labelled as hand-classified wherever it appears.
+
+New timing invocations reserve a unique report before provider work, retain attempted call/section statuses and failure or interruption details, and leave published timing JSON unchanged. `--output` must name a new file. Report isolation does not isolate services: the stock comparison seed resets its comparison stores, and the evolution recovery experiment stops its configured Ollama container (`OLLAMA_CONTAINER`, default `call-center-transcription-ollama-1`). Use a disposable checkout with separate stores and provider services, and set that target explicitly for a new controlled study.
 
 ## Environment of the published run
 
@@ -79,13 +81,13 @@ The original published comparison reported these defects from reading and runnin
 | Harness | A fixture whose runs all failed crashed the renderer, and a partly failed fixture showed a plain median | each cell names its failed runs; totals sum only fixtures both backends completed |
 | Harness | The gates checked response keys, not types, so non-UUID segment ids and a partial processing detail passed | parity and mutations validate responses against the shared models |
 | Harness | A health check counted HTTP 200 as healthy, though both APIs answer 200 when degraded | `run_compare.sh` and the seed wait for `status: ok` |
-| Harness | `benchmark.py --skip-pipeline` or `--skip-reads` could publish sections measured in different setups | refused unless commit, machine, packages and model match |
+| Harness | `benchmark.py --skip-pipeline` or `--skip-reads` could publish sections measured in different setups | Every invocation writes a separate report with its own provenance; partial runs include only their current section and never merge historical results |
 | Harness | "Parallel enrichment" and a stage-by-stage status were claimed for Pixeltable | both removed: `ollama.chat` is a synchronous UDF, so the five calls run one after another, and rows commit whole |
 | Harness | Ollama answered repeated prompts from its cache, so in an earlier run each fixture's first call was its slowest on almost every fixture, and the medians timed cached prompts | Ollama reloads the model before every timed call |
 
 ## October 2026 review and upgrade
 
-The backend now resolves Pixeltable 0.7.15. The detailed [review](../docs/REVIEW.md) distinguishes current validation from the retained 0.7.11 runtime measurements. Source counts and generated charts are refreshed independently of latency and evolution results.
+The backend now resolves Pixeltable 0.7.16. The detailed [review](../docs/REVIEW.md) distinguishes current validation from the retained 0.7.11 runtime measurements. Source counts and generated charts are refreshed independently of latency and evolution results.
 
 The first lesson uses a separate core profile that requests only the summary enrichment. It is outside the historical comparison, whose default full profile still requests all five enrichments. Both use the same TableModel/router implementation. No core-profile timing or quality claim is inferred from the full-profile measurements.
 

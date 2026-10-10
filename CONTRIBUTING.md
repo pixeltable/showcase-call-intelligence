@@ -32,7 +32,7 @@ scripts/                  # run_compare.sh, seed, gates, benchmarks, metrics, re
 
 ## Development setup
 
-Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.15; historical benchmark JSON retains the release actually measured. Start with the [core lesson](README.md#run-the-first-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
+Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.16; historical benchmark JSON retains the release actually measured. Start with the [core lesson](README.md#run-the-first-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
 
 ```bash
 cp .env.example .env                                  # set HF_TOKEN

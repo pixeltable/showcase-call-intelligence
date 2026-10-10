@@ -22,7 +22,8 @@ def exercise(calls: pxt.Table, comments: pxt.Table, call_id: uuid.UUID) -> dict:
     if FIELD in calls.columns():
         raise ValueError(f"{FIELD} already exists; refusing to replace it")
     source = calls.where(calls.id == call_id).select(calls.transcript, calls.segments, calls.summary).collect()
-    if len(source) != 1 or not source[0]["segments"] or "billing" not in (source[0]["transcript"] or "").lower():
+    if (len(source) != 1 or not source[0]["segments"] or not source[0]["summary"]
+            or "billing" not in (source[0]["transcript"] or "").lower()):
         raise ValueError("Use the completed billing fixture for this exercise")
     before = source[0]
     segment_id = uuid.uuid5(call_id, "0")

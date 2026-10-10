@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Time both backends on the same machine, one call in flight at a time. Writes compare/results/benchmarks.json.
+"""Time both backends on the same machine, one call in flight at a time. Writes a new report under compare/reports/benchmark/.
 
     uv run python scripts/benchmark.py                 # 3 rounds over all 10 fixtures, then reads
     uv run python scripts/benchmark.py --rounds 1 --fixtures billing-inquiry-speech.wav
@@ -24,6 +24,7 @@ import statistics
 import subprocess
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,7 +35,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from lib.client import FIXTURES, Api, backends, load_manifest, reset_llm  # noqa: E402
 
-OUT = ROOT / "compare" / "results" / "benchmarks.json"
+REPORT_DIR = ROOT / "compare" / "reports" / "benchmark"
 STATE_FILE = ROOT / ".compare-state.json"
 VERSION_PACKAGES = ["pixeltable", "whisperx", "torch", "sentence-transformers", "fastapi", "sqlalchemy", "celery"]
 
@@ -124,8 +125,43 @@ def time_call(api: Api, entry: dict) -> dict:
     return result
 
 
-# What must match for a section measured earlier to be published beside one measured now.
-SAME_SETUP = ("git_commit", "source_fingerprint", "machine", "python", "packages", "ollama")
+def setup_provenance(entries: list[dict], *, pipeline: bool, reads: bool) -> dict:
+    """Identify the actual fixture bytes, seed state, and configured endpoints of this invocation."""
+    setup = {
+        "fixture_manifest_sha256": hashlib.sha256((FIXTURES / "manifest.json").read_bytes()).hexdigest(),
+        "fixture_sha256": {
+            entry["file"]: hashlib.sha256((FIXTURES / entry["file"]).read_bytes()).hexdigest()
+            for entry in entries if pipeline
+        },
+        "api_urls": {"reference": os.getenv("REF_API", "http://127.0.0.1:8001"),
+                     "pixeltable": os.getenv("PXT_API", "http://127.0.0.1:8000")},
+        "model_config": {name: os.getenv(name) for name in (
+            "WHISPERX_MODEL", "WHISPERX_DIARIZATION_MODEL", "EMBED_MODEL", "PXT_ENRICHMENT_PROFILE",
+        )},
+    }
+    if reads:
+        setup["seed_state_sha256"] = hashlib.sha256(STATE_FILE.read_bytes()).hexdigest()
+    return setup
+
+
+def timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
+def measure_call(api: Api, entry: dict, report: dict, *, phase: str, round_no: int | None = None) -> dict:
+    attempt = {"backend": api.name, "fixture": entry["file"], "phase": phase,
+               "round": round_no, "status": "running", "started_at": timestamp()}
+    report["attempts"].append(attempt)
+    try:
+        result = time_call(api, entry)
+        attempt.update(status="succeeded" if result["status"] == "completed" else "failed",
+                       call_status=result["status"], error=result.get("error"))
+        return result
+    except Exception as exc:
+        attempt.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        raise
+    finally:
+        attempt["finished_at"] = timestamp()
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -161,81 +197,109 @@ def time_reads(apis: tuple[Api, Api], ids: dict[str, str], requests: dict[str, s
     return out
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--reads", type=int, default=50, help="Requests per read endpoint per backend")
     parser.add_argument("--fixtures", nargs="*", help="Fixture file names (default: the whole manifest)")
     parser.add_argument("--skip-pipeline", action="store_true")
     parser.add_argument("--skip-reads", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--output", type=Path, help="New JSON report path; existing files are refused before provider work")
+    args = parser.parse_args(argv)
     if args.rounds < 1 or args.reads < 1:
         parser.error("--rounds and --reads must be positive")
+    if args.skip_pipeline and args.skip_reads:
+        parser.error("At least one measurement section must be requested")
 
-    ref, pxt = backends()
-    entries = [e for e in load_manifest() if not args.fixtures or e["file"] in args.fixtures]
-    if not entries:
-        parser.error("No fixtures matched --fixtures")
-    previous = json.loads(OUT.read_text()) if OUT.is_file() else {}
-    report = {"environment": environment(os.getenv("OLLAMA_HOST", "http://localhost:11434"), os.getenv("OLLAMA_MODEL", "llama3.1"))}
-    if (args.skip_pipeline or args.skip_reads) and previous:
-        changed = [k for k in SAME_SETUP if previous["environment"].get(k) != report["environment"].get(k)]
-        if changed:
-            print(f"refusing to publish sections measured in different setups ({', '.join(changed)} changed); run both", file=sys.stderr)
-            return 2
+    run_id = str(uuid.uuid4())
+    output = args.output or REPORT_DIR / f"{run_id}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = output.open("x")
+    except FileExistsError:
+        parser.error(f"Report already exists: {output}")
+    report = {"schema_version": 2, "run_id": run_id, "started_at": timestamp(), "status": "running",
+              "requested_sections": [name for name, skip in (("pipeline", args.skip_pipeline), ("reads", args.skip_reads)) if not skip],
+              "sections": {}, "attempts": [],
+              "configuration": {"rounds": args.rounds, "reads": args.reads, "fixtures": args.fixtures}}
+    exit_code = 0
+    with handle:
+        try:
+            manifest = load_manifest()
+            entries = [e for e in manifest if not args.fixtures or e["file"] in args.fixtures]
+            if not args.skip_pipeline and not entries:
+                raise ValueError("No fixtures matched --fixtures")
+            smallest = min(manifest, key=lambda e: (FIXTURES / e["file"]).stat().st_size) if not args.skip_pipeline else None
+            report["environment"] = environment(os.getenv("OLLAMA_HOST", "http://localhost:11434"), os.getenv("OLLAMA_MODEL", "llama3.1"))
+            report["setup"] = setup_provenance(entries + ([smallest] if smallest else []),
+                                                pipeline=not args.skip_pipeline, reads=not args.skip_reads)
+            report["setup"]["identity"] = hashlib.sha256(json.dumps(
+                {"environment": report["environment"], "setup": report["setup"]}, sort_keys=True,
+            ).encode()).hexdigest()
+            ref, pxt = backends()
 
-    if not args.skip_pipeline:
-        smallest = min(load_manifest(), key=lambda e: (FIXTURES / e["file"]).stat().st_size)
-        # This warms the current process state; the script does not restart services itself.
-        report["warmup_scope"] = "current service state; not a verified cold start"
-        report["first_call"] = {}
-        for api in (ref, pxt):
-            print(f"warm-up call {api.name} ({smallest['file']})")
-            report["first_call"][api.name] = time_call(api, smallest)
-        pipeline: dict[str, dict[str, list]] = {e["file"]: {"reference": [], "pixeltable": []} for e in entries}
-        for round_no in range(args.rounds):
-            order = (ref, pxt) if round_no % 2 == 0 else (pxt, ref)
-            for entry in entries:
-                for api in order:
-                    result = time_call(api, entry)
-                    pipeline[entry["file"]][api.name].append(result)
-                    print(f"  round {round_no + 1} {api.name:<10} {entry['file']:<30} {result['complete_sec']:>7}s {result['status']}")
-        report["pipeline"] = pipeline
-        report["pipeline_rounds"] = args.rounds
-        report["pipeline_measured_at"] = report["environment"]["measured_at"]
-    elif "pipeline" in previous:
-        for key in ("first_call", "pipeline", "pipeline_rounds"):
-            report[key] = previous[key]
-        report["pipeline_measured_at"] = previous.get("pipeline_measured_at", previous["environment"]["measured_at"])
+            if not args.skip_pipeline:
+                section = {"status": "running", "started_at": timestamp()}
+                report["sections"]["pipeline"] = section
+                # This warms the current process state; the script does not restart services itself.
+                report["warmup_scope"] = "current service state; not a verified cold start"
+                report["first_call"] = {}
+                for api in (ref, pxt):
+                    print(f"warm-up call {api.name} ({smallest['file']})")
+                    report["first_call"][api.name] = measure_call(api, smallest, report, phase="warmup")
+                pipeline = {e["file"]: {"reference": [], "pixeltable": []} for e in entries}
+                report["pipeline"] = pipeline
+                report["pipeline_rounds"] = args.rounds
+                report["pipeline_measured_at"] = report["environment"]["measured_at"]
+                for round_no in range(args.rounds):
+                    order = (ref, pxt) if round_no % 2 == 0 else (pxt, ref)
+                    for entry in entries:
+                        for api in order:
+                            result = measure_call(api, entry, report, phase="timed", round_no=round_no + 1)
+                            pipeline[entry["file"]][api.name].append(result)
+                            print(f"  round {round_no + 1} {api.name:<10} {entry['file']:<30} {result['complete_sec']:>7}s {result['status']}")
+                section.update(status="failed" if any(a["status"] == "failed" for a in report["attempts"]) else "succeeded",
+                               finished_at=timestamp())
 
-    if not args.skip_reads:
-        state = json.loads(STATE_FILE.read_text())
-        first = next(iter(state.values()))
-        print(f"reads ({args.reads} per endpoint per backend, interleaved)")
-        report["reads"] = time_reads(
-            (ref, pxt),
-            {"reference": first["ref_id"], "pixeltable": first["pxt_id"]},
-            {
-                "list calls": "/api/calls?limit=50",
-                "call detail": "/api/calls/{id}",
-                "kpis": "/api/calls/kpis",
-                "flagged": "/api/calls/flagged",
-                "search keyword": "/api/search?q=billing&mode=keyword",
-                "search semantic": "/api/search?q=monthly%20subscription%20fees&mode=semantic",
-                "search hybrid": "/api/search?q=refund&mode=hybrid",
-            },
-            args.reads,
-        )
-        report["reads_corpus"] = {"calls": len(state)}
-        report["reads_measured_at"] = report["environment"]["measured_at"]
-    elif "reads" in previous:
-        report["reads"], report["reads_corpus"] = previous["reads"], previous.get("reads_corpus")
-        report["reads_measured_at"] = previous.get("reads_measured_at", previous["environment"]["measured_at"])
-
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"wrote {OUT.relative_to(ROOT)}")
-    return 0
+            if not args.skip_reads:
+                section = {"status": "running", "started_at": timestamp()}
+                report["sections"]["reads"] = section
+                state = json.loads(STATE_FILE.read_text())
+                first = next(iter(state.values()))
+                print(f"reads ({args.reads} per endpoint per backend, interleaved)")
+                report["reads"] = time_reads(
+                    (ref, pxt),
+                    {"reference": first["ref_id"], "pixeltable": first["pxt_id"]},
+                    {
+                        "list calls": "/api/calls?limit=50",
+                        "call detail": "/api/calls/{id}",
+                        "kpis": "/api/calls/kpis",
+                        "flagged": "/api/calls/flagged",
+                        "search keyword": "/api/search?q=billing&mode=keyword",
+                        "search semantic": "/api/search?q=monthly%20subscription%20fees&mode=semantic",
+                        "search hybrid": "/api/search?q=refund&mode=hybrid",
+                    },
+                    args.reads,
+                )
+                report["reads_corpus"] = {"calls": len(state)}
+                report["reads_measured_at"] = report["environment"]["measured_at"]
+                section.update(status="succeeded", finished_at=timestamp())
+            report["status"] = "failed" if any(s["status"] == "failed" for s in report["sections"].values()) else "succeeded"
+            exit_code = int(report["status"] == "failed")
+        except KeyboardInterrupt:
+            report.update(status="interrupted", error="KeyboardInterrupt")
+            exit_code = 130
+        except Exception as exc:
+            report.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+            exit_code = 1
+        finally:
+            for entry in [*report["sections"].values(), *report["attempts"]]:
+                if entry["status"] == "running":
+                    entry.update(status=report["status"], error=report.get("error"), finished_at=timestamp())
+            report["finished_at"] = timestamp()
+            handle.write(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {output}. Historical published results are unchanged.")
+    return exit_code
 
 
 if __name__ == "__main__":

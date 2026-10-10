@@ -1,0 +1,120 @@
+{
+  "run_id": "f6b5ed7d-0071-4eb4-8902-c22859d54d80",
+  "started_at": "2026-10-09T23:47:15.078807+00:00",
+  "profile": "core",
+  "provider_substitutes": false,
+  "fixture": {
+    "file": "billing-inquiry-speech.wav",
+    "sha256": "df7bf4f24c48f88b8f340d830aed79e2db162ed11495d2554380e447eda0255e"
+  },
+  "packages": {
+    "pixeltable": "0.7.16",
+    "whisperx": "3.8.6",
+    "torch": "2.8.0",
+    "pyannote.audio": "4.0.7",
+    "sentence-transformers": "5.7.0"
+  },
+  "python": "3.12.7",
+  "scope": "one real local-model fixture; not a latency or quality study",
+  "status": "failed",
+  "commands": [
+    {
+      "command": [
+        "pxt",
+        "schema",
+        "check",
+        "app.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "pxt",
+        "service",
+        "check",
+        "app.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "pxt",
+        "schema",
+        "update",
+        "app.py",
+        "live_core",
+        "-f"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "pxt",
+        "service",
+        "update",
+        "app.py",
+        "live_core",
+        "--port",
+        "23592",
+        "-f"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "credential_access": {
+    "HF_TOKEN": "authorized",
+    "pyannote/speaker-diarization-3.1": "authorized",
+    "pyannote/segmentation-3.0": "authorized",
+    "ollama_model": "llama3.1:latest available"
+  },
+  "isolated_catalog": true,
+  "existing_services_changed": false,
+  "first_attempt": {
+    "call_status": "failed",
+    "error": "llama-server process has terminated: signal: killed (status code: 500)",
+    "upload_accept_sec": 0.0030008750036358833,
+    "terminal_sec": 32.502942624967545,
+    "segments": [
+      {
+        "id": "c8f8b0f5-e346-59f4-83b4-2bb51e2e1a5b",
+        "speaker": "CUSTOMER",
+        "start_sec": 0.031,
+        "end_sec": 2.69,
+        "text": "Hello, I'm calling about my billing statement.",
+        "pos": 0
+      },
+      {
+        "id": "90aea047-6a5f-5fa9-983f-a755b511ddf2",
+        "speaker": "CUSTOMER",
+        "start_sec": 2.993,
+        "end_sec": 5.974,
+        "text": "I was charged twice this month and I'd like a refund please.",
+        "pos": 1
+      }
+    ]
+  },
+  "summary_retry": {
+    "command": "pxt recompute live_core/calls summary --errors-only -f --json",
+    "cli_exit_code": 0,
+    "num_rows": 1,
+    "num_computed_values": 0,
+    "num_excs": 1,
+    "call_status": "failed",
+    "error": "llama-server process has terminated: signal: killed (status code: 500)",
+    "transcript_segments_unchanged": true
+  },
+  "runtime": {
+    "docker_vm_memory_bytes": 8307830784,
+    "ollama_container_oom_killed": true,
+    "context_tokens": 4096,
+    "cache_type": "q8_0",
+    "model_loading_mmap": false
+  },
+  "required_action": "Provide more Docker VM memory; 12 GB is a starting allocation, not a validated minimum. Then recompute only the failed summary and verify cell errors plus HTTP status.",
+  "not_validated": [
+    "successful full lesson",
+    "real-model selective rule extension",
+    "controlled performance comparison",
+    "model quality"
+  ]
+}

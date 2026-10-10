@@ -222,6 +222,27 @@ def test_extension_recomputes_only_its_field_and_preserves_evidence(api):
     client.delete(f"/api/calls/{call_id}")
 
 
+def test_extension_rejects_a_failed_summary_before_changing_evidence(api):
+    global _malformed_output
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+    from extend_call import FIELD, exercise
+    client, app = api
+    _malformed_output = True
+    try:
+        call_id = upload(client, audio_file("failed-extension.wav", spoken=True))
+        call = completed(client, call_id)
+    finally:
+        _malformed_output = False
+    assert call["status"] == "failed" and call["summary"] is None
+    call_uuid = uuid.UUID(call_id)
+    calls, comments = app.Calls.table, app.CoachingComments.table
+    with pytest.raises(ValueError, match="completed billing fixture"):
+        exercise(calls, comments, call_uuid)
+    assert FIELD not in calls.columns()
+    assert comments.where(comments.call_id == call_uuid).count() == 0
+    client.delete(f"/api/calls/{call_id}")
+
+
 def test_silence_skips_model_calls(api) -> None:
     global _chat_calls
     client, _ = api

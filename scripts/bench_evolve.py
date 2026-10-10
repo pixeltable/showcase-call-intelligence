@@ -318,7 +318,7 @@ def rerun_step(full_reprocess: bool) -> dict:
 
 # ---------------------------------------------------- 3. recover from an LLM outage
 
-OLLAMA_CONTAINER = "call-center-transcription-ollama-1"
+OLLAMA_CONTAINER = os.getenv("OLLAMA_CONTAINER", "call-center-transcription-ollama-1")
 ENRICHMENTS = ("summary", "action_items", "sentiment", "category", "qa_scorecard")
 
 
@@ -330,7 +330,7 @@ def ollama_up(timeout_sec: float = 300) -> None:
         try:
             import httpx
 
-            httpx.post(f"{host}/api/generate", json={"model": model, "prompt": "", "stream": False}, timeout=300)
+            httpx.post(f"{host}/api/generate", json={"model": model, "prompt": "", "stream": False}, timeout=300).raise_for_status()
             return
         except Exception:
             time.sleep(2)
@@ -366,6 +366,8 @@ def recover_failed_step() -> dict:
                 script = f"from worker.tasks.resume_call import resume_call_processing; resume_call_processing({call_id!r})"
                 steps.run("run the resume task written for this (resume_call.py)", ["uv", "run", "python", "-c", script], REF_DIR)
             after = api.detail(call_id)
+            if not after or after["status"] != "completed":
+                raise RuntimeError(f"{api.name} recovery did not complete: {(after or {}).get('error_message')}")
             result[api.name] = {
                 "status_after_outage": before["status"],
                 "segments_kept_through_outage": len(before["segments"]),

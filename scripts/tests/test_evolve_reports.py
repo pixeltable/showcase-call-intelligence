@@ -4,11 +4,24 @@ import json
 import sys
 from pathlib import Path
 
+import httpx
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bench_evolve as evolve  # noqa: E402
+
+
+def test_failed_model_load_is_not_reported_as_recovery(monkeypatch):
+    stamps = iter([0.0, 0.0, 301.0])
+    monkeypatch.setattr(evolve.time, "time", lambda: next(stamps))
+    monkeypatch.setattr(evolve.time, "sleep", lambda _: None)
+    monkeypatch.setattr(evolve.subprocess, "run", lambda *args, **kwargs: None)
+    response = httpx.Response(500, json={"error": "model killed"},
+                              request=httpx.Request("POST", "http://ollama/api/generate"))
+    monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: response)
+    with pytest.raises(RuntimeError, match="did not come back"):
+        evolve.ollama_up()
 
 
 @pytest.fixture

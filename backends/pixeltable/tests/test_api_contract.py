@@ -6,12 +6,15 @@ is created before Pixeltable is imported. Only the external model functions are 
     uv run --with pytest python -m pytest tests/test_api_contract.py -q
 """
 
+import io
 import json
 import os
 import sys
+import threading
 import time
 import uuid
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -36,6 +39,8 @@ _chat_calls = 0
 _embedding_failure = False
 _asr_calls = 0
 _embedding_calls = 0
+_pause_asr = False
+_asr_entered, _asr_release = threading.Event(), threading.Event()
 
 
 @pxt.udf
@@ -43,6 +48,9 @@ def fixture_transcribe(audio: pxt.Audio, *, model: str, diarize: bool, num_speak
                        diarization_model_name: str) -> dict:
     global _asr_calls
     _asr_calls += 1
+    if _pause_asr:
+        _asr_entered.set()
+        assert _asr_release.wait(10), "Blocking fixture was not released"
     with av.open(audio) as container:
         spoken = any(np.any(frame.to_ndarray()) for frame in container.decode(audio=0))
     return {"segments": [
@@ -96,7 +104,6 @@ def api():
     application.include_router(app.api)
     with TestClient(application) as client:
         yield client, app
-    app._inserts.shutdown(wait=True)
     pxt.drop_dir("contract_test", force=True)
 
 
@@ -208,7 +215,9 @@ def test_extension_recomputes_only_its_field_and_preserves_evidence(api):
     from extend_call import FIELD, exercise
     client, app = api
     call_id = upload(client, audio_file("extension.wav", spoken=True))
-    completed(client, call_id)
+    call = completed(client, call_id)
+    saved_comment = client.post("/api/comments", json={"call_id": call_id, "segment_id": call["segments"][0]["id"],
+                                 "start_sec": 0, "author": "reviewer", "comment": "Keep this original note"}).json()
     before_calls = (_chat_calls, _asr_calls, _embedding_calls)
     call_uuid = uuid.UUID(call_id)
     calls, comments = app.Calls.table, app.CoachingComments.table
@@ -216,9 +225,11 @@ def test_extension_recomputes_only_its_field_and_preserves_evidence(api):
     assert result["after_recompute"] is True
     assert result["transcript_summary_segments_unchanged"] is True
     assert result["comment_still_anchored"] is True
+    assert result["existing_comments_unchanged"] is True
     assert before_calls == (_chat_calls, _asr_calls, _embedding_calls)
     assert FIELD not in calls.columns()
-    assert comments.where(comments.call_id == call_uuid).count() == 0
+    assert comments.where(comments.call_id == call_uuid).count() == 1
+    assert client.get(f"/api/calls/{call_id}").json()["comments"][0]["id"] == saved_comment["id"]
     client.delete(f"/api/calls/{call_id}")
 
 
@@ -330,6 +341,8 @@ def test_index_failure_keeps_transform_data_and_surfaces_search_errors(api) -> N
     try:
         call = completed(client, call_id)
         assert call["status"] == "completed"
+        assert call["search_readiness"] == "failed"
+        assert call["search_error"]
         assert len(call["segments"]) == 2
         assert client.get("/api/search", params={"q": "billing", "mode": "keyword"}).json()
         assert client.get("/api/search", params={"q": "billing", "mode": "semantic"}).status_code == 503
@@ -340,3 +353,103 @@ def test_index_failure_keeps_transform_data_and_surfaces_search_errors(api) -> N
     # Failed vectors must not appear as unscored semantic hits when query embedding works again.
     assert client.get("/api/search", params={"q": "billing", "mode": "semantic"}).json() == []
     client.delete(f"/api/calls/{call_id}")
+
+
+def test_receipt_restart_normalized_idempotency_and_pending_visibility(api, monkeypatch):
+    client, app = api
+    path = audio_file("durable.wav", spoken=True)
+    metadata = {"call_date": "2026-10-09T00:00:00+00:00", "agent_id": " a ", "customer_id": "c",
+                "queue": "billing"}
+    key = str(uuid.uuid4())
+    before = (_asr_calls, _chat_calls)
+    def send(data=metadata, blob=None):
+        return client.post("/api/calls/upload", headers={"Idempotency-Key": key},
+                           files={"audio": (path.name, io.BytesIO(blob or path.read_bytes()), "audio/wav")}, data=data)
+    with monkeypatch.context() as temporary:
+        temporary.setattr(app._worker, "submit", lambda _: None)  # crash boundary: accepted, never submitted
+        response = send()
+        assert response.status_code == 202
+        call_id = response.json()["id"]
+        pending = client.get(f"/api/calls/{call_id}").json()
+        assert pending["status"] == "processing" and pending["search_readiness"] == "pending"
+        roster = client.get("/api/calls").json()["rows"]
+        assert any(row["id"] == call_id for row in roster)
+        assert client.delete(f"/api/calls/{call_id}").status_code == 409
+        assert send({**metadata, "call_date": "2026-10-08T17:00:00-07:00", "agent_id": "a"}).json()["id"] == call_id
+        assert send(blob=b"different").status_code == 409
+        assert before == (_asr_calls, _chat_calls)
+    app.stop_intake()
+    app.start_intake()  # production startup hook recovers the persisted receipt
+    call = completed(client, call_id)
+    assert call["status"] == "completed" and call["search_readiness"] == "ready"
+    assert _asr_calls == before[0] + 1
+    assert send({**metadata, "agent_id": "a"}).json()["id"] == call_id
+    app._worker.close()
+    assert _asr_calls == before[0] + 1
+    assert client.delete(f"/api/calls/{call_id}").status_code == 204
+    assert send().status_code == 410
+    # Restore a fresh executor for subsequent module tests.
+    app.stop_intake()
+    app.start_intake()
+
+
+def test_receipt_detail_and_roster_remain_readable_during_real_insert(api):
+    global _pause_asr
+    client, _ = api
+    _asr_entered.clear()
+    _asr_release.clear()
+    _pause_asr = True
+    call_id = upload(client, audio_file("blocked-asr.wav", spoken=True))
+    try:
+        assert _asr_entered.wait(10)
+        with ThreadPoolExecutor(max_workers=2) as requests:
+            detail = requests.submit(client.get, f"/api/calls/{call_id}")
+            roster = requests.submit(client.get, "/api/calls")
+            assert detail.result(timeout=2).json()["status"] == "processing"
+            assert any(row["id"] == call_id for row in roster.result(timeout=2).json()["rows"])
+    finally:
+        _pause_asr = False
+        _asr_release.set()
+    assert completed(client, call_id)["status"] == "completed"
+    client.delete(f"/api/calls/{call_id}")
+
+
+def test_rule_quality_cases_expose_overtriage_and_missed_language(api):
+    from pixeltable.functions.string import contains
+    cases = json.loads((Path(__file__).resolve().parents[3] / "examples/billing_rule_cases.json").read_text())
+    table = pxt.create_table("contract_test.rule_cases", {"text": pxt.String | None})
+    try:
+        table.add_computed_column(needs_billing_review=contains(table.text, "billing", case=False))
+        table.insert([{"text": case["text"]} for case in cases])
+        observed = list(table.select(table.text, table.needs_billing_review).collect())
+        by_text = {row["text"]: row["needs_billing_review"] for row in observed}
+        assert [by_text[case["text"]] for case in cases] == [case["rule_result"] for case in cases]
+        assert sum(case["rule_result"] != case["needs_review"] for case in cases) == 2
+    finally:
+        pxt.drop_table(table)
+
+
+@pytest.mark.parametrize("boundary", ["receipt_write", "media_unlink"])
+def test_delete_retry_finishes_receipt_cleanup_after_canonical_row_was_removed(api, monkeypatch, boundary):
+    client, app = api
+    path = audio_file("delete-boundary.wav", spoken=True)
+    metadata = {"call_date": "2026-10-09T00:00:00+00:00", "agent_id": "a", "customer_id": "c", "queue": "billing"}
+    key = str(uuid.uuid4())
+    def send():
+        return client.post("/api/calls/upload", headers={"Idempotency-Key": key}, data=metadata,
+                           files={"audio": (path.name, io.BytesIO(path.read_bytes()), "audio/wav")})
+    call_id = send().json()["id"]
+    completed(client, call_id)
+    with monkeypatch.context() as temporary:
+        if boundary == "receipt_write":
+            temporary.setattr(app._intake, "delete", lambda _: (_ for _ in ()).throw(OSError("receipt write lost")))
+        else:
+            class FailedUnlink:
+                def unlink(self, **kwargs):
+                    raise OSError("media unlink failed")
+            temporary.setattr(app._intake, "media_path", lambda _: FailedUnlink())
+        with pytest.raises(OSError):
+            client.delete(f"/api/calls/{call_id}")
+    assert client.delete(f"/api/calls/{call_id}").status_code == 204
+    assert not list(app.config.UPLOAD_DIR.glob(f"{call_id}.*"))
+    assert send().status_code == 410

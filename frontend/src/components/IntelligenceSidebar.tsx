@@ -4,7 +4,7 @@ import {
   momentPolarity,
   sentimentMoments,
 } from "../lib/sentiment";
-import type { CallDetail } from "../api/client";
+import { EXAMPLE_DATA, type CallDetail } from "../api/client";
 import { qaLabel } from "../lib/verticals";
 
 interface Props {
@@ -70,7 +70,9 @@ export function IntelligenceSidebar({ call }: Props) {
       </section>
 
       {call.enrichment_profile === "core" ? (
-        <p className="text-sm text-slate-400">This lesson requests a transcript and summary. Category, action items, sentiment, and review scores are not computed.</p>
+        <p className="text-sm text-slate-400">{EXAMPLE_DATA
+          ? "This saved example pairs a recorded transcript with an authored summary. Optional assessments are omitted."
+          : "This lesson requests a transcript and summary. Category, action items, sentiment, and review scores are not computed."}</p>
       ) : (
       <details className="space-y-4 border-t border-slate-800 pt-3">
         <summary className="cursor-pointer text-sm text-slate-300">Additional model assessments</summary>

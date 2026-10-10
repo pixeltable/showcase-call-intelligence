@@ -94,6 +94,7 @@ CONCERNS: dict[str, dict[str, list[str]]] = {
     "pixeltable": {
         "Schema and pipeline": ["app.py::", "app.py::the pipeline", "functions.py"],
         "Queries and HTTP": ["app.py::queries", "app.py::API"],
+        "Upload intake (local durable receipts)": ["intake.py"],
         "Settings (config.py)": ["config.py"],
     },
 }  # fmt: skip

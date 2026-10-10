@@ -18,6 +18,9 @@ ENRICHMENT_PROFILE = os.getenv("PXT_ENRICHMENT_PROFILE", "full")
 if ENRICHMENT_PROFILE not in {"core", "full"}:
     raise ValueError("PXT_ENRICHMENT_PROFILE must be core or full")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
+MAX_PENDING_UPLOADS = int(os.getenv("PXT_MAX_PENDING_UPLOADS", "8"))
+if MAX_PENDING_UPLOADS < 1:
+    raise ValueError("PXT_MAX_PENDING_UPLOADS must be positive")
 UPLOAD_DIR = Path(os.getenv("PXT_UPLOAD_DIR", str(_REPO / "data" / "pixeltable" / "uploads"))).resolve()
 # Media the API may serve: uploads, and the files Pixeltable computes (always $PIXELTABLE_HOME/media).
 MEDIA_ROOTS = (UPLOAD_DIR, (Path(os.getenv("PIXELTABLE_HOME", "~/.pixeltable")).expanduser() / "media").resolve())

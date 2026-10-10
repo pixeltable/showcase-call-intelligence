@@ -1,6 +1,13 @@
 name: Schema smoke
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "backends/pixeltable/**"
+      - "shared/**"
+      - "examples/**"
+      - ".github/workflows/schema-smoke.yml"
   pull_request:
     paths:
       - "backends/pixeltable/**"

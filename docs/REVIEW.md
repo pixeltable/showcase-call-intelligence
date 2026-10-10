@@ -6,7 +6,7 @@ Reviewed October 8–9, 2026, on the existing `measured-comparison` branch. The 
 
 The Pixeltable implementation demonstrates the intended foundation for a coding agent: a `TableModel` schema, a computed-column dependency graph, typed segment expansion, an embedding index, and a `FastAPIRouter` in one application module. Product rules stay in the shared package. Imports do not create or mutate catalog objects, models load through provider wrappers rather than once per row, and application queries use the public SDK.
 
-This is a credible local developer showcase after the fixes below. It is not yet a fully validated production intake service or a model-quality benchmark. Durable upload acceptance and persistent per-call search readiness remain material gaps. The README now states those boundaries next to the narrative instead of implying that a compact backend alone settles deployment readiness.
+This is a credible local developer showcase after the fixes below. It is not yet a fully validated production intake service or a model-quality benchmark. The October 10 release closes local durable acceptance with a single-writer receipt spool and persists last-insert search diagnostics. Public deployment, continuous index-readiness verification, and real-model completion remain separate boundaries. The README now states those boundaries next to the narrative instead of implying that a compact backend alone settles deployment readiness.
 
 ## Findings and changes
 
@@ -36,7 +36,7 @@ Existing users should install the frozen lock, export the configured environment
 
 ## First lesson and research follow-through
 
-The primary path now starts one Pixeltable backend and UI, with Ollama as its only Docker service. It uses a dedicated `data/lesson/` catalog and one committed six-second audio fixture. Repeated seeding reuses the saved call rather than resetting stores or uploading a duplicate. The full comparison remains optional and always selects the original full enrichment profile.
+The first-lesson pass introduced one Pixeltable backend and UI, with Ollama as its only Docker service. It uses a dedicated `data/lesson/` catalog and one committed six-second audio fixture. Repeated seeding reuses the saved call rather than resetting stores or uploading a duplicate. The full comparison remains optional and always selects the original full enrichment profile.
 
 The core profile requests only the summary model call; category, action items, sentiment, and QA remain null. Health, roster, and detail responses identify the profile, and the core sentiment KPI is null. This removes actual optional provider work and avoids presenting omitted assessments as scores. The UI leads with summary/evidence, keeps demo metadata editable under a disclosure, and demotes uncalibrated optional assessments. Core and full declare different column kinds; their launchers use separate catalogs rather than attempting an in-place profile migration.
 
@@ -46,7 +46,7 @@ A further research defect was identified in `bench_evolve.py`: partial or failed
 
 ## Verified in this pass
 
-The final focused run passed 97 test executions across the suites/profiles below; the full-profile run skips the core-only case intentionally. Both FastAPI test suites emit the installed Starlette adapter's `httpx` deprecation warning. The review-owned service and daemon were stopped after the original live checks.
+The original focused run passed 97 test executions across the suites/profiles below; the full-profile run skips the core-only case intentionally. Both FastAPI test suites emit the installed Starlette adapter's `httpx` deprecation warning. The review-owned service and daemon were stopped after the original live checks.
 
 | Check | Result and boundary |
 |---|---|
@@ -64,15 +64,15 @@ CI now uses frozen locks, runs Reference contract tests, and runs Pixeltable sch
 
 ## Remaining deployment and research boundaries
 
-1. **Durable intake and admission.** Pixeltable uploads are accepted into an in-memory executor before the row commits. A process restart can lose accepted work and leave an upload file behind; the pending queue and pre-commit failure records are not durable. Use a persisted intake/receipt design with bounded admission, idempotent submission, and tested recovery before accepting external workloads. The Reference also needs a tested database-to-broker handoff and worker/broker recovery policy.
-2. **Index readiness.** Pixeltable's implicit embedding index can hold errors while call transforms are `completed`. `UpdateStatus` and the public `pxt.get_dir_tree()` expose operation diagnostics, but historical error counts do not indicate present per-call readiness. A recovered query provider can return fewer results while old segment vectors are still missing. A production design should materialize an observable embedding/readiness column or another persistent public-SDK diagnostic path. Replacing the existing index would require an intentional index rebuild; this review did not silently perform that migration or use private SDK internals.
-3. **External deployment.** The app has no authentication, tenancy, rate/admission control, validated backup/restore, or externally tested scaling. Health endpoints do not prove provider tokens, model downloads, diarization permission, and cold model loading will succeed. The local showcase is the verified operating envelope.
+1. **Durable intake and admission.** The current local Pixeltable service persists fsynced media and SQLite receipts before acceptance, bounds accepted pending work, deduplicates request keys, and reconciles after restart. These guarantees depend on one writer and one retained local spool/catalog. Multipart body parsing, preaccept staging, total disk retention, request rate, and exactly-once external model side effects are not bounded or guaranteed. The Reference still needs a tested database-to-broker handoff and worker/broker recovery policy.
+2. **Index readiness.** Pixeltable's implicit embedding index can hold errors while call transforms are `completed`. `UpdateStatus` and the public `pxt.get_dir_tree()` expose operation diagnostics, but historical error counts do not indicate present per-call readiness. A recovered query provider can return fewer results while old segment vectors are still missing. New receipts now persist public insert diagnostics, exposing the last intake observation as ready/failed, or unknown for legacy rows and reconciliation without saved diagnostics. External catalog edits/recompute do not refresh that observation; continuous readiness verification is still separate. Replacing the existing index would require an intentional index rebuild; this review did not silently perform that migration or use private SDK internals.
+3. **External deployment.** The app has no authentication, tenancy, request/rate control, validated backup/restore, or externally tested scaling. Accepted-work admission is bounded locally. Health endpoints do not prove provider tokens, model downloads, diarization permission, and cold model loading will succeed. The local showcase is the verified operating envelope.
 4. **Fresh runtime comparisons.** The committed timing/evolution JSON was collected on Pixeltable 0.7.11. Current source counts are refreshed, but the 0.7.16 latency, evolution, real-provider parity, outage recovery, and throughput experiments must be rerun before publishing new performance claims. Patch applicability was checked; the model-backed experiments were not executed.
 5. **Hardware and precision controls.** The Reference chooses CPU; Pixeltable's wrappers can select available accelerators. The historical artifact does not identify the execution device per model, and the vector-index defaults can differ in precision. Future controlled studies should record and align devices, precision, batch sizes, model digests, and cache policy, or report those differences as part of each implementation.
 6. **Model quality.** Roles are heuristic and ASR is configured for two speakers across all verticals. Fixtures include synthetic audio, repeated excerpts, and fictional metadata; they are behavior fixtures rather than independent ground-truth evaluation data. Sentiment/QA scores and generated recommendations need task-specific labeled evaluation before business use.
-7. **Previously reported SDK issues.** The older `revert()` and query-construction observations are documented as 0.7.11 observations. They were not revalidated as 0.7.15 defects, and no current capability claim depends on them.
+7. **Previously reported SDK issues.** The older `revert()` and query-construction observations are documented as 0.7.11 observations. They were not revalidated as 0.7.16 defects, and no current capability claim depends on them.
 
-For developers, the next substantive experiment is a new computed field with an explicit recompute and failure recovery demonstration. For researchers, it is a fresh controlled comparison on 0.7.16 with recorded execution settings and an independently labeled corpus. Those tasks have observable outcomes and preserve the showcase's focus on reusable backend foundations.
+For developers, the next exercise is the [rule walkthrough](WALKTHROUGH.md), including explicit recompute, preservation, and quality limits. For researchers, it is a fresh controlled comparison on 0.7.16 with recorded execution settings and an independently labeled corpus. Those tasks have observable outcomes and preserve the showcase's focus on reusable backend foundations.
 
 ## Latest-release and live validation - October 9, 2026
 
@@ -81,3 +81,62 @@ Pixeltable 0.7.16 was released during this follow-up, so the dependency floor, l
 The real six-second billing fixture used WhisperX, pyannote, local Ollama, and sentence-transformer providers in a new temporary home. The existing Hugging Face token passed both model gates. ASR produced two timestamped segments and the expected billing/refund speech. Summary generation failed because Ollama's llama-server was killed while loading llama3.1; a summary-only retry also failed with one cell exception. The CLI exited zero despite that cell error, so both its diagnostics and the HTTP call status were checked. The call remained failed, with its transcript preserved. The live record is [validation/2026-10-09.json](validation/2026-10-09.json). This is a recorded partial failure, not a passing end-to-end lesson or a timing comparison.
 
 The Docker VM reported 8,307,830,784 bytes shared with other services, and the Ollama container recorded an out-of-memory kill. More model memory is required before repeating the summary; 12 GB is a proposed starting VM allocation, not a tested minimum. No existing container was recreated, stopped, or reconfigured. No additional call-side key was missing. Only the review-owned service was stopped after evidence capture. The historical runtime/evolution JSON was preserved.
+
+
+## Durable local intake and zero-key product walkthrough - October 10, 2026
+
+The release adds a small standard-library local upload spool in `backends/pixeltable/intake.py`.
+SQLite transactions own admission and idempotency; UUID media files are fsynced before receipt
+commit. A process-lifetime flock excludes a second service writer. Startup reconciles the canonical
+call ID before a new insert, checks source/model/profile identity, and resumes only queued/running
+receipts. Failed cells and failed precommit inserts remain terminal with their media retained for
+explicit recovery. Delayed duplicate snapshots cannot change terminal diagnostics or resurrect
+an idempotency tombstone. A retried deletion finishes receipt/media cleanup if canonical deletion
+committed before a receipt failure. Pending detail bypasses catalog queries, and a real blocked-ASR
+integration check confirmed that detail and merged roster remain readable during an insert.
+
+Call detail now has additive `search_readiness` and `search_error` fields. New receipts retain the
+public SDK's insert diagnostics, rather than reading private index internals. These are last-insert
+observations; legacy and commit-reconciled rows remain unknown, and external recompute does not
+silently turn the observation into a current audit. The shared Reference response defaults unknown.
+The intentional intake differences are documented in `compare/CAPABILITY_PARITY.md`, and all
+application-owned receipt code is included in refreshed source metrics. Historical benchmark and
+evolution JSON remains unchanged; this release is not a fresh runtime comparison.
+
+`npm run demo` in `frontend` provides the same dashboard and recording workspace without a backend,
+keys, Docker, weights, or model calls. Saved WhisperX transcript/timestamps and the committed audio
+are tied to the October 9 live record; the summary is explicitly authored for illustration because
+that live summary failed. A persistent notice and provenance link disclose keyword-only search
+and browser-local comments. Uploads are unavailable in example mode. Normal production builds
+retain the live API, with a separate static example build. Root browser checks verified playback,
+segment selection, comments after reload, keyword-result navigation, and the desktop/narrow layouts
+at an actual 520 px viewport (a requested 390 px viewport was clamped). Screenshots are committed
+under `docs/images`; this proves saved-example UI behavior, not successful live model computation.
+
+The extension now starts from a plausible narrow “payment reversal” rule and broadens it to
+“billing”, preserving original comments as well as its probe anchor. Its small authored quality
+fixture set demonstrates overtriage and missed duplicate-charge language, with an unknown result
+for absent text. The [walkthrough](WALKTHROUGH.md) links the dashboard to each source responsibility,
+the live lesson, explicit recompute, and [deployment profiles](DEPLOYMENT.md).
+
+Final focused validation passed **135 test executions** across the release suites/profiles:
+
+| Check | Result and boundary |
+|---|---|
+| Durable intake | 11 tests passed, including real process exits at both commit boundaries, concurrent retries, bounded admission, writer exclusion, drift, terminal failures, stale snapshots, and diagnostics. Standard library with substituted canonical writes; no providers. |
+| Full Pixeltable API | 23 tests passed; one core-only case intentionally skipped. Real temporary catalogs/columns/views/indexes/media/API with deterministic provider substitutes, plus both deletion interruption cases. |
+| Core Pixeltable API | 8 selected tests passed, including optional-call omission, rule extension, original comment preservation, lexical quality limits, startup recovery, blocked-ASR visibility, and delete retries. No live providers. |
+| Comparison/lesson/example harness | 37 tests passed, including lost-response seed intent reuse and recorded example media/transcript provenance. |
+| Shared / Reference contracts | 47 shared and 7 Reference tests passed in the root agent's final run against the additive detail fields. Reference database/provider dependencies were substituted. |
+| Frontend retry identity | 2 Node tests passed; changed same-size media bytes or normalized metadata rotate the key, and same-input failed-response retries retain it. |
+| Source/service/UI checks | Full-repository lint and whitespace checks, source metric/document/chart checks, live-mode production build, static example build, and frontend lint passed. Pixeltable 0.7.16 schema and service declaration checks passed in a fresh temporary home; its review-owned daemon was stopped. These checks do not start a real-model pipeline. |
+
+The current Pixeltable implementation measures 680 application LOC across four files, including
+application-owned intake; Reference remains 1,171 LOC across 24 files and shared code is 696 LOC.
+The concern classification explicitly includes the local durable receipt store. These source counts
+were regenerated; benchmark/evolution JSON remained byte-for-byte unchanged from HEAD. The installed
+Starlette/httpx test adapter emits its known deprecation warning in SDK API tests.
+
+No live model requests, existing-catalog resets, private SDK index access, or PDF changes were made.
+The example-mode development server was stopped after the root's browser verification; all other
+pre-existing services were left untouched.

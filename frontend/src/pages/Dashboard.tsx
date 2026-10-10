@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, EXAMPLE_DATA } from "../api/client";
+import { EXAMPLE_CALL_ID } from "../examples/exampleApi";
 import { CallRoster } from "../components/CallRoster";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { KpiBanner } from "../components/KpiBanner";
@@ -36,17 +37,26 @@ export function Dashboard() {
           <h1 className="text-3xl font-bold">Conversation Intelligence</h1>
           {health && (
             <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-              {BACKEND_LABEL[health.backend]}
+              {EXAMPLE_DATA ? "Example data" : BACKEND_LABEL[health.backend]}
             </span>
           )}
         </div>
         <p className="text-slate-400">
           Start with one recording. Review its summary, search the transcript, and leave a comment at a specific moment.
         </p>
+        <a href="https://github.com/pixeltable/showcase-call-intelligence/blob/main/docs/WALKTHROUGH.md"
+          className="mt-2 inline-block text-sm text-indigo-300 underline underline-offset-4">Developer walkthrough and source map</a>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <UploadForm onUploaded={(id) => setPendingIds((ids) => [...ids, id])} />
+        {EXAMPLE_DATA ? <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <h2 className="text-lg font-semibold">Explore a billing conversation</h2>
+          <p className="max-w-prose text-sm text-slate-300">Play the six-second recording, find “billing” in the transcript,
+            and attach a review note to the evidence. This saved example needs no keys or model downloads.</p>
+          <button type="button" onClick={() => navigate(`/calls/${EXAMPLE_CALL_ID}`)}
+            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Open example recording</button>
+          <p className="text-sm text-slate-400">Use the live lesson to process your own uploads and run semantic search.</p>
+        </section> : <UploadForm onUploaded={(id) => setPendingIds((ids) => [...ids, id])} />}
         <GlobalSearch
           onSelectCall={(callId, startSec, segmentId) => {
             const params = new URLSearchParams();

@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { SearchHit } from "../api/client";
-import { api } from "../api/client";
+import { api, EXAMPLE_DATA } from "../api/client";
 
 const PAGE_SIZE = 5;
 
@@ -68,6 +68,7 @@ export function GlobalSearch({ onSelectCall }: Props) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
       <h2 className="mb-2 text-lg font-semibold">Global Search</h2>
+      {EXAMPLE_DATA && <p className="mb-3 text-sm text-slate-300">Keyword search of the saved transcript. Try “billing” or “refund”. Semantic search requires the live backend.</p>}
       {semanticUnavailable && (
         <p className="mb-2 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
           Semantic search may be unavailable: {embedCheck?.detail ?? "embedding model not ready"}. Keyword
@@ -81,7 +82,7 @@ export function GlobalSearch({ onSelectCall }: Props) {
           maxLength={500}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder='e.g. "cancel my subscription"'
+          placeholder={EXAMPLE_DATA ? 'e.g. "billing"' : 'e.g. "cancel my subscription"'}
           className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
         />
         <button type="submit" disabled={isFetching || !query.trim()} className="rounded bg-slate-700 px-4 py-2 text-sm hover:bg-slate-600 disabled:opacity-50">
@@ -98,7 +99,7 @@ export function GlobalSearch({ onSelectCall }: Props) {
       {!isFetching && !isError && submitted && results.length === 0 && (
         <p className="mt-2 text-sm text-slate-400">No results for &ldquo;{submitted}&rdquo;.</p>
       )}
-      {!semanticUnavailable && !isFetching && !isError && keywordOnlyResults && (
+      {!EXAMPLE_DATA && !semanticUnavailable && !isFetching && !isError && keywordOnlyResults && (
         <p className="mt-2 text-sm text-slate-400">
           Showing keyword matches. Hybrid search also adds semantically related segments from other calls when
           they do not contain your exact query text.

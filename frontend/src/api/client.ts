@@ -1,3 +1,7 @@
+import { exampleApi } from "../examples/exampleApi";
+
+export const EXAMPLE_DATA = import.meta.env.MODE === "example";
+
 export interface CallSummary {
   enrichment_profile?: "core" | "full";
   id: string;
@@ -35,6 +39,8 @@ export interface Comment {
 }
 
 export interface CallDetail extends CallSummary {
+  search_readiness?: "pending" | "ready" | "failed" | "unknown";
+  search_error?: string | null;
   original_filename: string;
   action_items: string[] | null;
   sentiment: Record<string, unknown> | null;
@@ -111,7 +117,7 @@ async function requestRows<T>(path: string): Promise<T[]> {
   return Array.isArray(body) ? body : body.rows;
 }
 
-export const api = {
+const liveApi = {
   listCalls: (params: Record<string, string | number | undefined> = {}) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
@@ -122,8 +128,9 @@ export const api = {
   getKpis: () => request<Kpis>("/api/calls/kpis"),
   getHealth: () => request<HealthResponse>("/api/health"),
   getCall: (id: string) => request<CallDetail>(`/api/calls/${id}`),
-  uploadCall: (form: FormData) =>
-    request<{ id: string; status: string }>("/api/calls/upload", { method: "POST", body: form }),
+  uploadCall: (form: FormData, key?: string) =>
+    request<{ id: string; status: string }>("/api/calls/upload", { method: "POST", body: form,
+      headers: key ? { "Idempotency-Key": key } : undefined }),
   search: (q: string) => requestRows<SearchHit>(`/api/search?q=${encodeURIComponent(q)}&mode=hybrid`),
   createComment: (payload: {
     call_id: string;
@@ -140,3 +147,5 @@ export const api = {
   audioUrl: (id: string) => `/api/calls/${id}/audio`,
   videoUrl: (id: string) => `/api/calls/${id}/video`,
 };
+
+export const api = EXAMPLE_DATA ? exampleApi : liveApi;

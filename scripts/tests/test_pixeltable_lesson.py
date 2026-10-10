@@ -83,8 +83,9 @@ def api(monkeypatch, tmp_path):
             return self.saved_call
         def health(self):
             return {"status": "ok", "enrichment_profile": "core"}
-        def upload(self, path, metadata):
+        def upload(self, path, metadata, *, idempotency_key=None):
             assert path.name == "billing-inquiry-speech.wav"
+            assert idempotency_key
             self.upload_count += 1
             return "new-call"
         def wait(self, call_id):
@@ -115,3 +116,18 @@ def test_seed_refuses_full_profile_before_upload(api, monkeypatch):
     with pytest.raises(RuntimeError, match="core lesson"):
         seed.main()
     assert api.upload_count == 0 and api.closed
+
+
+def test_lost_upload_response_retries_the_saved_key_and_exact_metadata(api, monkeypatch):
+    intents = []
+    def upload(path, metadata, *, idempotency_key=None):
+        intents.append((idempotency_key, metadata))
+        if len(intents) == 1:
+            raise RuntimeError("response was lost")
+        return "recovered-call"
+    monkeypatch.setattr(api, "upload", upload)
+    with pytest.raises(RuntimeError, match="response was lost"):
+        seed.main()
+    assert seed.STATE_FILE.exists()
+    assert seed.main() == 0
+    assert intents[0] == intents[1]

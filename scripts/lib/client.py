@@ -75,7 +75,7 @@ class Api:
         resp.raise_for_status()
         return resp.json()
 
-    def upload(self, path: Path, meta: dict, *, agent_suffix: str = "") -> str:
+    def upload(self, path: Path, meta: dict, *, agent_suffix: str = "", idempotency_key: str | None = None) -> str:
         agent_id = f"{meta['agent_id']}-{agent_suffix}" if agent_suffix else meta["agent_id"]
         mime = MIME_BY_EXT.get(path.suffix.lower(), "application/octet-stream")
         with path.open("rb") as handle:
@@ -89,6 +89,7 @@ class Api:
                     "vertical": meta.get("vertical", "call_center"),
                 },
                 files={"audio": (path.name, handle, mime)},
+                headers={"Idempotency-Key": idempotency_key} if idempotency_key else None,
             )
         if resp.status_code != 202:
             raise RuntimeError(f"{self.name} upload {path.name}: HTTP {resp.status_code} {resp.text[:300]}")

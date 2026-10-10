@@ -23,12 +23,14 @@ LLM wording is not compared: it is the model's, not the backend's.
 
 | Difference | Reference | Pixeltable | Why |
 |---|---|---|---|
-| List envelope | `[...]` | `{"rows": [...]}` | `add_query_route` wraps rows; the client accepts both (`requestRows`) |
-| Progress while processing | a stage per commit | `processing`, and the roster lists the call when done | a Pixeltable row commits with all its computed columns |
+| List envelope | `[...]` | `{"rows": [...]}` | the current roster handler retains the original envelope; the client accepts both (`requestRows`) |
+| Progress while processing | a stage per commit | `processing` from a persisted receipt; the roster includes accepted uncommitted calls | a Pixeltable row commits with all its computed columns |
 | Segment ids | database UUIDs | UUIDv5 of the call id and the segment's position | segments are rows of an iterator view keyed by position |
 | A failed step | the call is `failed`; stages already committed stay | the failing cell and the cells computed from it hold the error; the others keep their values | per-cell errors |
-| Deleting a call that is still processing | immediate | waits for the insert, which holds the table lock | inserts lock `calls` and its views |
-| A restart while a call is processing | the `queued` row and its last status stay | the accepted call is gone: its id returns 404 and the upload stays on disk | an accepted upload lives in the service process until its row commits |
+| Deleting a call that is still processing | immediate | 409 until its receipt reaches a terminal state | prevents deletion from racing a scheduled insert |
+| A restart while a call is processing | the `queued` row and its last status stay | media and receipt survive; startup reconciles an existing call or resumes its pending insert | local single-writer receipt recovery; failed work does not retry automatically |
+| Upload retry keys / capacity | no idempotency contract or bounded admission in this app | `Idempotency-Key` deduplicates normalized metadata + bytes; changed input409, deleted key410, full pending queue429 | deliberately different intake boundary; historical runtime measurements predate it |
+| Search readiness | detail defaults to unknown | persisted last-insert diagnostics; legacy/reconciled calls unknown | additive shared detail fields; not a continuous index audit |
 | Admin repair routes (`/api/admin/*`) | behind `ENABLE_ADMIN_ENDPOINTS` | none; `pxt errors` and `pxt recompute` from the CLI | repair is a platform command |
 
 ## Shared by construction

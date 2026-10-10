@@ -2,6 +2,8 @@ import type { FormEvent } from "react";
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { uploadIdentity } from "../api/uploadIdentity.js";
+import type { UploadIdentity } from "../api/uploadIdentity.js";
 import { DEFAULT_VERTICAL, VERTICAL_OPTIONS, getProfile } from "../lib/verticals";
 
 // Mirrors ALLOWED_UPLOAD_EXTENSIONS in shared/call_center_api/constants.py.
@@ -19,14 +21,17 @@ interface Props {
 export function UploadForm({ onUploaded }: Props) {
   const qc = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
+  const identityRef = useRef<UploadIdentity | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [status, setStatus] = useState("");
   const [vertical, setVertical] = useState(DEFAULT_VERTICAL);
   const labels = getProfile(vertical).labels;
 
   const mutation = useMutation({
-    mutationFn: (form: FormData) => api.uploadCall(form),
+    mutationFn: ({form, key}: {form: FormData; key: string}) => api.uploadCall(form, key),
     onSuccess: ({ id }) => {
       setStatus("Upload accepted. Processing in the background.");
+      identityRef.current = null;
       formRef.current?.reset();
       setVertical(DEFAULT_VERTICAL);
       onUploaded?.(id);
@@ -36,14 +41,23 @@ export function UploadForm({ onUploaded }: Props) {
     onError: (err: Error) => setStatus(err.message),
   });
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (mutation.isPending) return;
+    if (mutation.isPending || preparing) return;
     const form = new FormData(e.currentTarget);
     // datetime-local has no offset; send an absolute instant so both backends store the same time.
     form.set("call_date", new Date(String(form.get("call_date"))).toISOString());
-    setStatus("Uploading...");
-    mutation.mutate(form);
+    setPreparing(true);
+    setStatus("Preparing recording...");
+    try {
+      identityRef.current = await uploadIdentity(form, identityRef.current);
+      setStatus("Uploading...");
+      mutation.mutate({form, key: identityRef.current.key});
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to prepare the recording. Try again.");
+    } finally {
+      setPreparing(false);
+    }
   }
 
   return (
@@ -101,10 +115,10 @@ export function UploadForm({ onUploaded }: Props) {
       </details>
       <button
         type="submit"
-        disabled={mutation.isPending}
+        disabled={mutation.isPending || preparing}
         className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
       >
-        {mutation.isPending ? "Uploading..." : "Upload & Process"}
+        {preparing ? "Preparing..." : mutation.isPending ? "Uploading..." : "Upload & Process"}
       </button>
       {status && <p role={mutation.isError ? "alert" : "status"} className={mutation.isError ? "text-sm text-red-400" : "text-sm text-slate-400"}>{status}</p>}
     </form>

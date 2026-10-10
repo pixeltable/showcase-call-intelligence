@@ -16,6 +16,7 @@ This repo implements one call-intelligence product twice and measures the differ
 ```
 backends/
   pixeltable/app.py       # schema, pipeline, queries and HTTP (pxt schema / pxt service)
+  pixeltable/intake.py    # local SQLite receipts + fsynced media + one service writer
   pixeltable/functions.py # the UDFs app.py calls
   reference/app/          # FastAPI routers, SQLAlchemy models, services
   reference/worker/       # Celery app and tasks
@@ -32,7 +33,7 @@ scripts/                  # run_compare.sh, seed, gates, benchmarks, metrics, re
 
 ## Development setup
 
-Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.16; historical benchmark JSON retains the release actually measured. Start with the [core lesson](README.md#run-the-first-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
+Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.16; historical benchmark JSON retains the release actually measured. Explore [example data](README.md#open-the-example-without-keys) with only Node, then start the [core lesson](README.md#run-the-first-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
 
 ```bash
 cp .env.example .env                                  # set HF_TOKEN
@@ -50,20 +51,20 @@ Without services, as CI runs them:
 
 ```bash
 (cd shared && uv run --with pytest python -m pytest tests -q)
-(cd backends/pixeltable && uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q)
+(cd backends/pixeltable && uv run --frozen --with pytest python -m pytest tests/test_intake.py tests/test_api_contract.py -q)
 (cd backends/pixeltable && PXT_ENRICHMENT_PROFILE=core uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q -k 'core_profile or extension')
 (cd backends/reference && uv run --frozen --with pytest python -m pytest tests/test_contract.py -q)
 uvx ruff@0.16.9 check . && uv run --with pytest python -m pytest scripts/tests -q
 uv run python scripts/metrics.py --check
 uv run python scripts/render_results.py --check
-(cd frontend && npx tsc -b && npx oxlint)
+(cd frontend && npm test && npm run build && npm run build:demo && npm run lint)
 ```
 
 With both stacks up and seeded:
 
 ```bash
 uv run python scripts/compare_all.py                  # gates: parity on the seeded fixtures, then mutations
-uv run python scripts/benchmark.py                    # timings -> compare/results/benchmarks.json
+uv run python scripts/benchmark.py                    # new invocation report -> compare/reports/benchmark/
 uv run python scripts/bench_evolve.py --full-reprocess  # new invocation report -> compare/reports/evolve/; re-seed after
 uv run python scripts/metrics.py && uv run python scripts/render_results.py
 (cd backends/pixeltable && PXT_INSERT_SMOKE=1 uv run python -m unittest tests.test_insert_smoke -v)
@@ -80,7 +81,7 @@ Evolution runs never merge with or overwrite `compare/results/evolve.json`. Each
 | `compare_parity.py` | gate: same structure, transcripts, search, roster, filters and KPIs on both |
 | `compare_mutations.py` | gate: comments and delete, verified down to each store |
 | `compare_all.py` | both gates |
-| `benchmark.py` | pipeline and read timings |
+| `benchmark.py` | pipeline and read timings; save a new invocation report under `compare/reports/benchmark/` |
 | `bench_evolve.py` | add a field; selectively rerun a step; recover from an outage; save a new invocation report under `compare/reports/evolve/` |
 | `metrics.py` | code and architecture counts from source |
 | `render_results.py` | charts and doc tables from `compare/results/` |
@@ -92,4 +93,6 @@ Evolution runs never merge with or overwrite `compare/results/evolve.json`. Each
 2. Re-run the gates, then `metrics.py` and `render_results.py`, and commit the regenerated files.
 3. If a timing or change cost could move, re-run `benchmark.py` or `bench_evolve.py` before publishing updated runtime claims. Source counts may be refreshed separately; label retained runtime measurements as historical. `benchmark.py` fingerprints source and refuses to merge sections measured from different dirty checkouts, and its warm-up call does not establish a verified cold start.
 
-Out of scope for now: auth, rate limiting, multi-tenancy, backup and restore.
+The upload spool is single-writer and local: its receipt database must be backed up with its media and Pixeltable catalog. `PXT_MAX_PENDING_UPLOADS` bounds accepted queued/running receipts; it does not bound multipart parsing, concurrent preaccept staging, terminal data growth, or unauthenticated request rate. See [DEPLOYMENT.md](docs/DEPLOYMENT.md) before external exposure. Auth, tenancy, request/rate limits, backup/restore validation, and horizontal intake scaling remain outside this release.
+
+The [walkthrough](docs/WALKTHROUGH.md) maps the dashboard to source and the rule-quality fixtures. Keep example-data provenance distinct from live computation, and preserve the historical benchmark JSON when shipping application changes.

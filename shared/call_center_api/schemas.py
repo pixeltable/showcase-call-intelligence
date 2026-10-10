@@ -63,6 +63,8 @@ class CallSummary(BaseModel):
 
 
 class CallDetail(BaseModel):
+    search_readiness: Literal["pending", "ready", "failed", "unknown"] = "unknown"
+    search_error: str | None = None
     enrichment_profile: Literal["core", "full"] = "full"
     id: uuid.UUID
     audio_path: str

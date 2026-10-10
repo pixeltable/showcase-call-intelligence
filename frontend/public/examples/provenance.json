@@ -1,0 +1,20 @@
+{
+  "mode": "example-data",
+  "media": {
+    "file": "billing-inquiry-speech.wav",
+    "sha256": "df7bf4f24c48f88b8f340d830aed79e2db162ed11495d2554380e447eda0255e"
+  },
+  "transcript": {
+    "source": "docs/validation/2026-10-09.json first_attempt.segments",
+    "provider": "WhisperX 3.8.6 / base / pyannote speaker-diarization-3.1",
+    "recorded_at": "2026-10-09T23:47:15.078807+00:00",
+    "roles": "Heuristic speaker labels; not validated business roles"
+  },
+  "summary": {
+    "source": "Human-authored illustrative summary for this example-data UI",
+    "live_model_result": false
+  },
+  "status": "Example data is ready to browse; completed does not claim a successful live summary run",
+  "search": "Local keyword matching only; no semantic runtime or index",
+  "comments": "Browser-local storage only; not persisted in Pixeltable"
+}

@@ -26,6 +26,7 @@ def exercise(calls: pxt.Table, comments: pxt.Table, call_id: uuid.UUID) -> dict:
             or "billing" not in (source[0]["transcript"] or "").lower()):
         raise ValueError("Use the completed billing fixture for this exercise")
     before = source[0]
+    existing_comments = sorted(comments.where(comments.call_id == call_id).collect(), key=lambda row: str(row["id"]))
     segment_id = uuid.uuid5(call_id, "0")
     probe = comments.insert([{"call_id": call_id, "segment_id": str(segment_id),
                              "start_sec": before["segments"][0]["start_sec"], "author": "lesson",
@@ -34,7 +35,7 @@ def exercise(calls: pxt.Table, comments: pxt.Table, call_id: uuid.UUID) -> dict:
     added = False
     try:
         # Adding a computed column backfills it from the existing transcript.
-        calls.add_computed_column(**{FIELD: contains(calls.transcript, "__no_matching_topic__", case=False)})
+        calls.add_computed_column(**{FIELD: contains(calls.transcript, "payment reversal", case=False)})
         added = True
         initial = calls.where(calls.id == call_id).select(calls[FIELD]).collect()[0][FIELD]
         # Updating an expression can leave stored values intact until explicit recompute.
@@ -44,11 +45,17 @@ def exercise(calls: pxt.Table, comments: pxt.Table, call_id: uuid.UUID) -> dict:
         final = calls.where(calls.id == call_id).select(calls[FIELD]).collect()[0][FIELD]
         after = calls.where(calls.id == call_id).select(calls.transcript, calls.segments, calls.summary).collect()[0]
         anchor = comments.where(comments.id == probe["id"]).select(comments.segment_id).collect()[0]["segment_id"]
+        remaining_comments = sorted(
+            comments.where((comments.call_id == call_id) & (comments.id != probe["id"])).collect(),
+            key=lambda row: str(row["id"]),
+        )
         result = {"initial": initial, "before_recompute": unchanged, "after_recompute": final,
                   "transcript_summary_segments_unchanged": before == after,
-                  "comment_still_anchored": anchor == str(segment_id)}
+                  "comment_still_anchored": anchor == str(segment_id),
+                  "existing_comments_unchanged": existing_comments == remaining_comments}
         if result != {"initial": False, "before_recompute": False, "after_recompute": True,
-                      "transcript_summary_segments_unchanged": True, "comment_still_anchored": True}:
+                      "transcript_summary_segments_unchanged": True, "comment_still_anchored": True,
+                      "existing_comments_unchanged": True}:
             raise AssertionError(f"Exercise invariant failed: {result}")
         return result
     finally:

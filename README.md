@@ -3,17 +3,30 @@
 [![CI](https://github.com/pixeltable/showcase-call-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/pixeltable/showcase-call-intelligence/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Give a coding agent a backend it can extend without rebuilding media storage, dependency execution, derived-data maintenance, and vector indexing for each feature. This showcase implements one call-intelligence product twice. **Reference** is one implementation built with an AI coding assistant: FastAPI, Celery, Redis, Postgres with pgvector, Alembic. **Pixeltable** declares its schema, processing pipeline, queries, and HTTP routes in [`backends/pixeltable/app.py`](backends/pixeltable/app.py), with shared domain transforms in [`shared/call_center_api`](shared/call_center_api).
+Give a coding agent a backend it can extend without rebuilding media storage, dependency execution, derived-data maintenance, and vector indexing for each feature. This showcase implements one call-intelligence product twice. **Reference** is one implementation built with an AI coding assistant: FastAPI, Celery, Redis, Postgres with pgvector, Alembic. **Pixeltable** declares its schema, processing pipeline, queries, and HTTP routes in [`backends/pixeltable/app.py`](backends/pixeltable/app.py), with shared domain transforms in [`shared/call_center_api`](shared/call_center_api). The local upload boundary lives in [`intake.py`](backends/pixeltable/intake.py): durable receipts, bounded admission, idempotency, and restart reconciliation are application responsibilities.
 
 Both serve the same React UI and REST contract, use the same models and fixtures, and have shared parity gates. Upload a recording to extract its audio, transcribe and diarize it, derive summaries and follow-ups, search individual segments, and attach a coaching note to the evidence. The comparison makes the backend work behind an AI-generated demo inspectable: what the application owns, what Pixeltable maintains, and what still needs deployment engineering.
 
-- **Build:** [run the first lesson](#run-the-first-lesson), then [extend one field](#extend-one-field-then-recompute-it).
+- **Explore without keys:** [open the saved example](#open-the-example-without-keys), play the recording, search its transcript, and anchor a comment.
+- **Build:** [run the live lesson](#run-the-first-lesson), then [extend one field](#extend-one-field-then-recompute-it).
 - **Verify without model downloads:** [run the deterministic backend tests](#verify-the-backend-without-models).
 - **Evaluate:** read the [methodology](compare/METHODOLOGY.md), [pipeline specification](compare/PIPELINE_SPEC.md), and [review with validation boundaries](docs/REVIEW.md).
 
 The current backend targets [Pixeltable **0.7.16**](https://pypi.org/project/pixeltable/0.7.16/), the latest stable PyPI release verified on October 9, 2026. Published latency and evolution measurements below retain their original **0.7.11** environment; they are historical results, not fresh measurements of the upgraded code.
 
 Speaker roles, sentiment, and QA scores are illustrative model outputs. Role labels use a first-speaker heuristic, and the fixtures include synthetic calls and repeated video excerpts. These fixtures validate software behavior; they do not establish ASR accuracy, diarization accuracy, or business decision quality.
+
+## Open the example without keys
+
+```bash
+(cd frontend && npm ci && npm run demo)
+```
+
+Open **http://127.0.0.1:5176**. Play the committed six-second recording, search “billing” or “refund”, and leave a comment on a transcript segment. No Python backend, Docker, provider keys, model downloads, or model requests are needed.
+
+The banner identifies **example data**, throughout the dashboard and recording workspace. The transcript is recorded output from the real WhisperX check; the summary is an authored illustration, not a successful live Ollama result. Search uses local keyword matching; comments persist only in this browser. [Provenance](frontend/public/examples/provenance.json) links the saved outputs to their evidence. Use `npm run build:demo` for a static example build; normal `npm run build` keeps the live API.
+
+Follow the [product walkthrough and developer map](docs/WALKTHROUGH.md) to move from the dashboard to a real catalog, then change a rule without reprocessing its evidence. [Deployment profiles](docs/DEPLOYMENT.md) distinguish this example from a live local or externally exposed service.
 
 ## Run the first lesson
 
@@ -48,16 +61,16 @@ Press Ctrl-C in the UI terminal, then run `./scripts/run_pixeltable.sh stop` to 
 ./scripts/run_pixeltable.sh extend
 ```
 
-The [runnable exercise](examples/extend_call.py) adds a billing-review business rule computed from the stored transcript, changes its expression without recomputing, then explicitly recomputes only that field. It checks that the transcript, summary, segment identifiers, and an evidence comment remain unchanged. ASR, Ollama, and embeddings are not invoked. The exercise removes its temporary field and probe comment when done, so it can be repeated without schema drift.
+The [runnable exercise](examples/extend_call.py) starts with a narrow “payment reversal” review rule, changes it to recognize “billing”, then explicitly recomputes only that field from the stored transcript. It checks that the transcript, summary, segment identifiers, the probe comment anchor, and existing comments remain unchanged. ASR, Ollama, and embeddings are not invoked. The exercise removes its temporary field and probe comment when done, so it can be repeated without schema drift.
 
-Start a coding agent in this repository with the [Pixeltable skill](https://github.com/pixeltable/pixeltable-skill) and [CONTRIBUTING.md](CONTRIBUTING.md). Ask it to explain the exercise, then declare a new field in `TableModel`, expose it through the shared contract, and demonstrate the same preservation checks. Keep provider calls in computed columns, segment expansion in an iterator view, and lookup in an embedding index. Inspect `pxt schema diff` before applying a schema change, and explicitly recompute changed expressions. The [pipeline map](compare/BACKEND_MAPPING.md) shows each responsibility.
+Start a coding agent in this repository with the [Pixeltable skill](https://github.com/pixeltable/pixeltable-skill) and [CONTRIBUTING.md](CONTRIBUTING.md). Ask it to explain the exercise, then declare a new field in `TableModel`, expose it through the shared contract, and demonstrate the same preservation checks. Keep provider calls in computed columns, segment expansion in an iterator view, and lookup in an embedding index. Inspect `pxt schema diff` before applying a schema change, and explicitly recompute changed expressions. The [walkthrough](docs/WALKTHROUGH.md#change-a-business-rule-and-prove-reuse) gives the exact steps and expected observations; the [pipeline map](compare/BACKEND_MAPPING.md) shows each responsibility. The small [quality fixture set](examples/billing_rule_cases.json) exposes both overtriage and language this lexical rule misses.
 
 ## Verify the backend without models
 
 ```bash
 cd backends/pixeltable
 uv sync --frozen
-uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q
+uv run --frozen --with pytest python -m pytest tests/test_intake.py tests/test_api_contract.py -q
 PXT_ENRICHMENT_PROFILE=core uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q -k 'core_profile or extension'
 ```
 
@@ -68,8 +81,8 @@ This test suite creates a temporary catalog and exercises the real tables, compu
 <!-- results:code -->
 | Measured from source | Reference | Pixeltable |
 |---|---|---|
-| App code you maintain (lines) | 1,171 | 459 |
-| Files | 24 | 3 |
+| App code you maintain (lines) | 1,171 | 680 |
+| Files | 24 | 4 |
 | Project config files: pyproject.toml, alembic.ini (lines) | 59 | 20 |
 | Tables | 3 | 2 |
 | Views | n/a | 1 |
@@ -77,9 +90,9 @@ This test suite creates a temporary catalog and exercises the real tables, compu
 | Migration files | 3 | n/a |
 | Task-queue tasks | 4 | n/a |
 | Status writes in pipeline code | 11 | n/a |
-| Routes with a hand-written handler | 15 | 10 |
-| Routes declared from a query | n/a | 2 |
-| Orchestration hops | 50 | 13 |
+| Routes with a hand-written handler | 15 | 11 |
+| Routes declared from a query | n/a | 1 |
+| Orchestration hops | 50 | 17 |
 | Processes to run (hand-classified) | 4 | 1 |
 <!-- /results:code -->
 
@@ -241,18 +254,19 @@ Where the time goes, from the statuses the Reference commits (Pixeltable reports
 | search hybrid | 56.09ms | 74.78ms | 61.84ms | 83.98ms |
 <!-- /results:reads -->
 
-Both backends make the same WhisperX and LLM calls, so most of the pipeline's time is the models'. Neither runs the five LLM calls concurrently: the Reference loops over them, and Pixeltable's built-in `ollama.chat` is a synchronous UDF, which its engine runs one at a time.
+In the full comparison profile, both backends make the same WhisperX and LLM calls, so most of the pipeline's time is the models'. Neither runs the five LLM calls concurrently: the Reference loops over them, and Pixeltable's built-in `ollama.chat` is a synchronous UDF, which its engine runs one at a time.
 
 ## Where the Reference is ahead
 
-- **Progress.** It commits a status after each stage and lists a call as soon as it is uploaded. A Pixeltable row commits with all its computed columns, so until then the API says `processing` and the roster does not show the call.
+- **Progress.** It commits a status after each stage and lists a call as soon as it is uploaded. The Pixeltable receipt appears in detail and roster immediately as `processing`, but it does not expose individual model stages; the canonical row commits with all its computed columns.
 - **Throughput.** Pixeltable's inserts into one table hold its lock for the whole computation and run one at a time. Celery runs as many calls as it has workers. Here both run one at a time.
 - **Backfills.** The Reference's backfill task commits call by call. `pxt schema update` backfills a new column in one transaction, and one failing row rolls back the column.
-- **A durable call record.** The Reference commits a `queued` row before enqueueing work, so the record survives an API restart. This does not guarantee processing resumes: its database commit and broker publish are separate, Redis persistence is not configured, and Celery uses early acknowledgement. The Pixeltable app holds an accepted upload in memory until its row commits, so a service restart in between loses the call: its id returns 404 and the upload stays on disk.
-- **Reads.** Where Pixeltable's endpoints are hand-written, the Reference answers faster: building a Pixeltable query resolves the table once per selected expression. This app builds each select list once per process; semantic search, whose select list depends on the request, still pays that cost.
+- **Reads in the historical run.** Where Pixeltable's endpoints were hand-written, the Reference answered faster: building a Pixeltable query resolves the table once per selected expression. This app builds each select list once per process; semantic search, whose select list depends on the request, still pays that cost.
 - **Familiarity.** Every part of it is a tool most backend engineers know.
 
-More, and what neither has: [compare/WHY_PIXELTABLE.md](compare/WHY_PIXELTABLE.md#where-the-reference-is-ahead).
+The intake boundary has changed since the measured release. The Reference keeps its queued database record, but database commit and broker publish are separate, Redis persistence is not configured, and Celery uses early acknowledgement. The current Pixeltable app persists media and a SQLite receipt before acceptance and reconciles pending work on restart under one service writer. Failed work stays terminal for explicit recovery. Neither guarantee establishes exactly-once external model effects.
+
+More tradeoffs: [compare/WHY_PIXELTABLE.md](compare/WHY_PIXELTABLE.md#where-the-reference-is-ahead).
 
 ## Measure it
 
@@ -277,9 +291,9 @@ Source counts are refreshed when code changes. Runtime measurements require a fr
 
 ## Deployment boundary
 
-This is a local, single-tenant showcase. Docker ports bind to localhost. Before accepting external traffic, provide authentication, tenant isolation, rate and admission limits, a durable upload handoff with restart recovery, and a tested backup/restore workflow. The comparison does not validate those capabilities.
+This is a local, single-tenant showcase. Docker ports bind to localhost. The Pixeltable intake now bounds accepted queued/running uploads, by default eight, and reconciles them across service restarts. Before accepting external traffic, provide authentication, tenant isolation, request/body and rate limits, disk-retention policy, and a tested backup/restore workflow. See [deployment profiles](docs/DEPLOYMENT.md).
 
-On Pixeltable, `completed` describes the stored call transforms. Semantic-index readiness is separate: a segment embedding can fail while its transcript and enrichments remain available. Inserts log failed-column diagnostics, and `pxt.get_dir_tree()` exposes recorded operation error counts; those counts are historical diagnostics, not a readiness guarantee. Search returns an explicit error when query embedding fails and omits missing vectors instead of returning unscored semantic hits. A production intake design should persist and expose search readiness, as detailed in the [review](docs/REVIEW.md).
+On Pixeltable, `completed` describes the stored call transforms. Semantic-index readiness is separate: a segment embedding can fail while its transcript and enrichments remain available. New intake receipts persist the public insert operation’s diagnostics and expose `search_readiness` and `search_error` in call detail. Successful inserts report ready; observed cell/index failures report failed. Legacy rows and commit-reconciled receipts report unknown. This is the last intake observation, not continuous verification after external edits or recompute. Search returns an explicit error when query embedding fails and omits missing vectors instead of returning unscored semantic hits. The [walkthrough](docs/WALKTHROUGH.md#observe-the-intake-boundary) documents the receipt, key, admission, and recovery contract. SDK operation history is still separate from current readiness.
 
 ## Troubleshooting
 

@@ -1,0 +1,44 @@
+{
+  "enrichment_profile": "core",
+  "id": "8f566780-3000-41af-9c26-889c4de08638",
+  "call_date": "2026-10-09T23:47:15.078807+00:00",
+  "agent_id": "example-agent",
+  "customer_id": "example-customer",
+  "queue": "billing",
+  "vertical": "call_center",
+  "duration_sec": 5.974,
+  "handle_time_sec": 5.974,
+  "status": "completed",
+  "category": null,
+  "summary": "Customer reports a duplicate charge and requests a refund. Review the billing statement and confirm whether a duplicate payment occurred.",
+  "sentiment_label": null,
+  "sentiment_score": null,
+  "media_type": "audio",
+  "has_video_source": false,
+  "original_filename": "billing-inquiry-speech.wav",
+  "action_items": null,
+  "sentiment": null,
+  "qa_scorecard": null,
+  "error_message": null,
+  "segments": [
+    {
+      "id": "c8f8b0f5-e346-59f4-83b4-2bb51e2e1a5b",
+      "speaker": "CUSTOMER",
+      "start_sec": 0.031,
+      "end_sec": 2.69,
+      "text": "Hello, I'm calling about my billing statement.",
+      "pos": 0
+    },
+    {
+      "id": "90aea047-6a5f-5fa9-983f-a755b511ddf2",
+      "speaker": "CUSTOMER",
+      "start_sec": 2.993,
+      "end_sec": 5.974,
+      "text": "I was charged twice this month and I'd like a refund please.",
+      "pos": 1
+    }
+  ],
+  "comments": [],
+  "search_readiness": "unknown",
+  "search_error": null
+}

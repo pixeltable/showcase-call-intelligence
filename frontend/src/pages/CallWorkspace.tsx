@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { Segment } from "../api/client";
-import { TERMINAL_STATUSES, api } from "../api/client";
+import { TERMINAL_STATUSES, api, EXAMPLE_DATA } from "../api/client";
 import { CoachingComments } from "../components/CoachingComments";
 import { IntelligenceSidebar } from "../components/IntelligenceSidebar";
 import { SyncTranscript } from "../components/SyncTranscript";
@@ -103,7 +103,7 @@ export function CallWorkspace() {
           </h1>
           <p className="text-sm text-slate-400">
             {call.customer_id} · {new Date(call.call_date).toLocaleString()} ·{" "}
-            <span className="capitalize">{call.status}</span>
+            <span className="capitalize">{EXAMPLE_DATA ? "Saved example" : call.status}</span>
             {call.original_filename && (
               <>
                 {" "}
@@ -137,6 +137,13 @@ export function CallWorkspace() {
           {String(call.sentiment?.label ?? "unknown")}
         </span>}
       </div>
+
+      {!EXAMPLE_DATA && call.status === "completed" && call.search_readiness !== "ready" && <p
+        role={call.search_readiness === "failed" ? "alert" : "status"}
+        className="text-sm text-amber-200">
+        {call.search_readiness === "failed" ? "Search indexing reported errors." : "Search-index readiness has not been verified for this recording."}
+        {" "}Keyword search can still be used. {call.search_error}
+      </p>}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">

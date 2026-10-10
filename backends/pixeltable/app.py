@@ -3,8 +3,8 @@
 Insert a call and Pixeltable extracts the audio from a video, transcribes and diarizes it with
 WhisperX, labels the speakers, derives a summary, and embeds every segment for search. The full
 profile also derives action items, sentiment, category, and QA; the core lesson leaves those null.
-Nothing below schedules that work, records its progress, or cleans up after it: the columns
-declare what each row contains, and a failed cell keeps its error beside the others.
+The columns declare what each row contains, and a failed cell keeps its error beside the others.
+The HTTP intake persists bounded upload receipts; it schedules inserts, not pipeline stages.
 
     pxt init
     pxt schema update app.py call_center
@@ -12,17 +12,16 @@ declare what each row contains, and a failed cell keeps its error beside the oth
 """
 
 import functools
+import hashlib
 import logging
-import shutil
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
 import pixeltable as pxt
 import pixeltable.functions as pxtf
-from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pixeltable.functions.huggingface import sentence_transformer
 from pixeltable.functions.json import list_iterator
@@ -46,6 +45,7 @@ from call_center_api.schemas import (
     SearchHit,
 )
 from call_center_api.verticals import normalize_vertical
+from intake import IntakeError, IntakeStore, IntakeWorker
 
 TableModel = pxt.model_base()
 EMBED = sentence_transformer.using(model_id=config.EMBED_MODEL, normalize_embeddings=True)
@@ -164,20 +164,16 @@ def summary_columns() -> dict:
     )
 
 
-@pxt.query
 def list_calls(agent_id: str = "", queue: str = "", sentiment_label: str = "", min_handle_time: float = -1.0,
                limit: int = 50):  # fmt: skip
-    return (
-        Calls.where(
-            ((agent_id == "") | (Calls.agent_id == agent_id))
-            & ((queue == "") | (Calls.queue == queue))
-            & ((sentiment_label == "") | (Calls.sentiment.label == sentiment_label))
-            & ((min_handle_time < 0) | (Calls.handle_time_sec >= min_handle_time))
-        )
-        .order_by(Calls.call_date, asc=False)
-        .limit(limit)
-        .select(**summary_columns())
-    )
+    query = Calls.select(**summary_columns())
+    for value, column in ((agent_id, Calls.agent_id), (queue, Calls.queue),
+                          (sentiment_label, Calls.sentiment.label)):
+        if value:
+            query = query.where(column == value)
+    if min_handle_time >= 0:
+        query = query.where(Calls.handle_time_sec >= min_handle_time)
+    return query.order_by(Calls.call_date, asc=False).limit(limit)
 
 
 @pxt.query
@@ -246,30 +242,65 @@ def validate_page_size(limit: int | None = Query(None, ge=1, le=200)) -> None:
 api = FastAPIRouter(name="api", prefix="/api", dependencies=[Depends(validate_page_size)])
 
 # Declared: the rows come straight from a @pxt.query, wrapped as {"rows": [...]}.
-api.add_query_route(path="/calls", query=list_calls, method="get")
 api.add_query_route(path="/calls/flagged", query=flagged_calls, method="get")
 
 # Hand-written below. Paths with parameters (/calls/{id}) cannot be declared, and one upload field
 # feeds either the audio or the video column, which add_insert_route cannot express.
 
-# Inserts into one table serialize on its lock, so one worker is the real concurrency either way;
-# the Reference runs one Celery worker process for the same reason.
-_inserts = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pxt-insert")
-_in_flight: dict[uuid.UUID, dict] = {}  # accepted, not yet committed: a row is invisible until computed
-_failed: dict[uuid.UUID, tuple[dict, str]] = {}  # inserts that raised before any row was stored: (row, error)
+def pipeline_source_identity() -> str:
+    root = Path(__file__).resolve().parents[2]
+    files = [Path(__file__).with_name(name) for name in ("app.py", "functions.py", "config.py")]
+    files += sorted((root / "shared" / "call_center_api").glob("*.py"))
+    digest = hashlib.sha256()
+    for file in files:
+        digest.update(str(file.relative_to(root)).encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()
 
 
-def _insert(row: dict) -> None:
-    try:
-        # 'ignore' stores the row even when a cell fails; the error stays on that cell.
-        status = Calls.insert([row], on_error="ignore")
-        if status.num_excs:
-            logger.warning("Call %s committed with %s cell errors in %s", row["id"], status.num_excs, status.cols_with_excs)
-    except Exception as exc:
-        _failed[row["id"]] = (row, f"{type(exc).__name__}: {exc}")
-        Path(row["audio"] or row["video"]).unlink(missing_ok=True)  # no row will ever reference it
-    finally:
-        _in_flight.pop(row["id"], None)
+_intake = IntakeStore(config.UPLOAD_DIR, max_pending=config.MAX_PENDING_UPLOADS, pipeline={
+    "profile": config.ENRICHMENT_PROFILE, "asr": config.WHISPERX_MODEL,
+    "diarization": config.WHISPERX_DIARIZATION_MODEL, "summary": config.OLLAMA_MODEL,
+    "ollama_host": config.OLLAMA_HOST, "embedding": config.EMBED_MODEL, "sdk": pxt.__version__,
+    "source": pipeline_source_identity(),
+})
+_worker = None
+
+
+def start_intake():
+    global _worker
+    if _worker is not None:
+        return  # FastAPI may merge router startup hooks through both app and router lifespans.
+    _intake.open()
+    _worker = IntakeWorker(_intake, lambda call_id: Calls.where(Calls.id == call_id).count() == 1,
+                           lambda row: Calls.insert([row], on_error="ignore"))
+    _worker.start()
+
+
+def stop_intake():
+    global _worker
+    if _worker:
+        _worker.close()
+        _worker = None
+    _intake.close()
+
+
+api.add_event_handler("startup", start_intake)
+api.add_event_handler("shutdown", stop_intake)
+
+
+@api.get("/calls")
+def get_calls(agent_id: str = "", queue: str = "", sentiment_label: str = "", min_handle_time: float = -1.0,
+              limit: int = Query(50, ge=1, le=200)):
+    # Accepted rows are discoverable after a browser reload, before table computation commits.
+    pending = [_unstored(uuid.UUID(receipt["id"])) for receipt in _intake.pending()]
+    with _intake.connection() as db:
+        pending += [_unstored(uuid.UUID(row["id"])) for row in db.execute("SELECT id FROM receipts WHERE state='failed'")]
+    pending = [row for row in pending if row and (not agent_id or row["agent_id"] == agent_id)
+               and (not queue or row["queue"] == queue) and not sentiment_label and min_handle_time < 0]
+    rows = list(list_calls(agent_id, queue, sentiment_label, min_handle_time, limit).collect())
+    by_id = {str(row["id"]): row for row in pending + rows}
+    return {"rows": sorted(by_id.values(), key=lambda row: row["call_date"], reverse=True)[:limit]}
 
 
 @api.post("/calls/upload", response_model=CallUploadResponse, status_code=202)
@@ -280,6 +311,7 @@ def upload_call(
     customer_id: str = Form(..., min_length=1, max_length=128),
     queue: str = Form(..., min_length=1, max_length=128),
     vertical: str = Form("call_center"),
+    idempotency_key: str | None = Header(None, min_length=1, max_length=128),
 ):
     if call_date.utcoffset() is None:
         raise HTTPException(status_code=422, detail="call_date must include a timezone offset")
@@ -291,27 +323,23 @@ def upload_call(
         raise HTTPException(status_code=400, detail=f"File exceeds {config.MAX_UPLOAD_MB}MB limit")
     audio.file.seek(0)
 
-    call_id = uuid.uuid4()
-    config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    dest = config.UPLOAD_DIR / f"{call_id}{suffix}"
-    with dest.open("wb") as out:
-        shutil.copyfileobj(audio.file, out)
+    metadata = {"agent_id": agent_id.strip(), "customer_id": customer_id.strip(), "queue": queue.strip()}
+    if not all(metadata.values()):
+        raise HTTPException(status_code=422, detail="Participant IDs and queue must contain non-whitespace text")
     is_video = suffix in ALLOWED_VIDEO_EXTENSIONS
-    row = {
-        "id": call_id,
-        "audio": None if is_video else str(dest),
-        "video": str(dest) if is_video else None,
+    metadata.update({
         "media_type": "video" if is_video else "audio",
-        "call_date": call_date,
-        "agent_id": agent_id,
-        "customer_id": customer_id,
-        "queue": queue,
+        "call_date": call_date.astimezone(timezone.utc).isoformat(),
         "vertical": normalize_vertical(vertical),
-        "original_filename": Path(audio.filename or dest.name).name,
-    }
-    _in_flight[call_id] = row
-    _inserts.submit(_insert, row)
-    return {"id": str(call_id), "status": "queued"}
+        "original_filename": Path(audio.filename or "recording").name,
+    })
+    try:
+        receipt = _intake.accept(audio.file, suffix, metadata, idempotency_key)
+    except IntakeError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail,
+                            headers={"Retry-After": "5"} if exc.status == 429 else None) from exc
+    _worker.submit(receipt)
+    return {"id": receipt["id"], "status": receipt["state"]}
 
 
 @api.get("/calls/kpis", response_model=KpiResponse)
@@ -335,20 +363,24 @@ def get_kpis():
 
 @api.get("/calls/{call_id}", response_model=CallDetail)
 def get_call(call_id: uuid.UUID):
-    pending = _unstored(call_id)  # read before the query, so an insert that commits in between is still found
+    pending = _unstored(call_id)
+    if pending is not None:
+        return pending  # Avoid a table lock while a long insert is computing.
     rows = detail_query().where(Calls.id == call_id).collect()
     if len(rows) == 1:
-        return {**rows[0], "audio_path": f"/api/calls/{call_id}/audio", "comments": list_comments(call_id)}
-    if pending is not None:
-        return pending
+        receipt = _intake.get(call_id)
+        return {**rows[0], "audio_path": f"/api/calls/{call_id}/audio", "comments": list_comments(call_id),
+                "search_readiness": receipt["search_readiness"] if receipt else "unknown",
+                "search_error": receipt["search_error"] if receipt else None}
     raise HTTPException(status_code=404, detail="Call not found")
 
 
 def _unstored(call_id: uuid.UUID) -> dict | None:
     """An accepted upload with no row yet, in the full CallDetail shape. Pixeltable cannot say which stage it is in."""
-    row, error = _failed.get(call_id) or (_in_flight.get(call_id), None)
-    if row is None:
+    receipt = _intake.get(call_id)
+    if receipt is None or receipt["state"] in {"stored", "deleted"}:
         return None
+    row, error = _intake.row(receipt), receipt["error"]
     return {
         **dict.fromkeys(CallDetail.model_fields),
         **{k: row[k] for k in ("call_date", "agent_id", "customer_id", "queue", "vertical", "media_type", "original_filename")},
@@ -360,6 +392,8 @@ def _unstored(call_id: uuid.UUID) -> dict | None:
         "enrichment_profile": config.ENRICHMENT_PROFILE,
         "segments": [],
         "comments": [],
+        "search_readiness": receipt["search_readiness"],
+        "search_error": receipt["search_error"],
     }
 
 
@@ -384,12 +418,19 @@ def get_call_video(call_id: uuid.UUID):
 
 @api.delete("/calls/{call_id}", status_code=204)
 def delete_call(call_id: uuid.UUID):
+    receipt = _intake.get(call_id)
+    if receipt and receipt["state"] in {"queued", "running"}:
+        raise HTTPException(status_code=409, detail="This upload is still processing; wait before deleting it")
     rows = Calls.where(Calls.id == call_id).select(audio=Calls.audio.localpath, video=Calls.video.localpath).collect()
     if len(rows) == 0:
+        if receipt and receipt["state"] in {"failed", "stored", "deleted"}:
+            _intake.delete(call_id)
+            return
         raise HTTPException(status_code=404, detail="Call not found")
     CoachingComments.delete(where=CoachingComments.call_id == call_id)
     # The segments view and its embedding index follow the call row; the uploads are ours to remove.
     Calls.delete(where=Calls.id == call_id)
+    _intake.delete(call_id)
     for path in (rows[0]["audio"], rows[0]["video"]):
         if path and Path(path).is_relative_to(config.UPLOAD_DIR):
             Path(path).unlink(missing_ok=True)
@@ -444,7 +485,8 @@ def list_comments(call_id: uuid.UUID) -> list[dict]:
 @api.get("/health", response_model=HealthResponse)
 def health():
     checks = {"catalog": _check(lambda: Calls.table and None), "ollama": _check(_ollama_ready),
-              "embed_model": _check(lambda: config.EMBED_MODEL)}  # fmt: skip
+              "embed_model": _check(lambda: config.EMBED_MODEL),
+              "upload_intake": _check(lambda: f"{len(_intake.pending())}/{config.MAX_PENDING_UPLOADS} pending")}  # fmt: skip
     status = "ok" if all(c["ok"] for c in checks.values()) else "degraded"
     return {"status": status, "backend": "pixeltable", "checks": checks,
             "enrichment_profile": config.ENRICHMENT_PROFILE}

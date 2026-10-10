@@ -1,12 +1,13 @@
 {
   "backends": {
     "pixeltable": {
-      "app_files": 3,
-      "app_loc": 459,
+      "app_files": 4,
+      "app_loc": 680,
       "by_concern": {
-        "Queries and HTTP": 266,
+        "Queries and HTTP": 302,
         "Schema and pipeline": 179,
-        "Settings (config.py)": 14
+        "Settings (config.py)": 17,
+        "Upload intake (local durable receipts)": 182
       },
       "classified": {
         "intermediate_progress_visible": false,
@@ -20,14 +21,15 @@
       },
       "config_loc": 20,
       "file_breakdown": {
-        "backends/pixeltable/app.py": 357,
-        "backends/pixeltable/config.py": 14,
-        "backends/pixeltable/functions.py": 88
+        "backends/pixeltable/app.py": 393,
+        "backends/pixeltable/config.py": 17,
+        "backends/pixeltable/functions.py": 88,
+        "backends/pixeltable/intake.py": 182
       },
       "migrations": null,
-      "orchestration_hops": 13,
-      "routes_declared": 2,
-      "routes_hand_written": 10,
+      "orchestration_hops": 17,
+      "routes_declared": 1,
+      "routes_hand_written": 11,
       "status_writes": null,
       "tables": 2,
       "task_queue_tasks": null,
@@ -115,11 +117,11 @@
   },
   "shared": {
     "app_files": 5,
-    "app_loc": 694,
+    "app_loc": 696,
     "file_breakdown": {
       "shared/call_center_api/constants.py": 5,
       "shared/call_center_api/enrichment.py": 235,
-      "shared/call_center_api/schemas.py": 101,
+      "shared/call_center_api/schemas.py": 103,
       "shared/call_center_api/segmentation.py": 88,
       "shared/call_center_api/verticals.py": 265
     }

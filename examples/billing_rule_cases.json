@@ -1,0 +1,8 @@
+[
+  {"text": "I have a question about my billing statement.", "rule_result": true, "needs_review": true},
+  {"text": "The BILLING charge appeared twice.", "rule_result": true, "needs_review": true},
+  {"text": "Billing is correct. Thank you for explaining it.", "rule_result": true, "needs_review": false},
+  {"text": "My card was charged twice. Can you refund it?", "rule_result": false, "needs_review": true},
+  {"text": "Please help me reset my password.", "rule_result": false, "needs_review": false},
+  {"text": null, "rule_result": null, "needs_review": null}
+]

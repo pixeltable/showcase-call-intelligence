@@ -4,11 +4,11 @@ This repo implements one call-intelligence product twice and measures the differ
 
 ## Rules that are easy to break
 
-1. **Never type a number into a doc.** Numbers come from `compare/results/*.json` and are written into the docs by `scripts/render_results.py` between `<!-- results:... -->` markers. CI fails when they drift.
+1. **Never type a measured number into a doc.** Measurements come from `compare/results/*.json` and are written into [the results](compare/RESULTS.md), backend analysis, and methodology by `scripts/render_results.py` between `<!-- results:... -->` markers. CI fails when they drift. Keep the README focused on the demo and links to this evidence.
 2. **A metric with no pattern for a backend renders `n/a`, never `0`.** Pixeltable has no migration files because it has no migrations, not because it wrote zero of them.
 3. **One contract.** Both backends serve [`shared/call_center_api/schemas.py`](shared/call_center_api/schemas.py) to one React client. A change to the contract is a change to both backends, the client and the gates.
 4. **Hold each backend to its platform's own idioms.** Pixeltable is one `app.py` applied with `pxt schema update` and served with `pxt service update`, as its docs prescribe. If either side is more verbose than its platform requires, that is our bug, not its cost.
-5. **Fix a defect on whichever side has it.** Neither backend wins a comparison on a bug. Record the fix in [METHODOLOGY.md](compare/METHODOLOGY.md#fixed-in-this-pass).
+5. **Fix a defect on whichever side has it.** Neither backend wins a comparison on a bug. Record the fix in [METHODOLOGY.md](compare/METHODOLOGY.md#fixed-during-the-original-comparison).
 6. **Do not claim behavior you did not observe.** Timings come from `scripts/benchmark.py`, change costs from `scripts/bench_evolve.py`, and a failed run is published, not retried away. The exception is a run the harness broke: fix the harness, record the fix in METHODOLOGY.md, and re-run in full.
 
 ## Layout
@@ -33,7 +33,7 @@ scripts/                  # run_compare.sh, seed, gates, benchmarks, metrics, re
 
 ## Development setup
 
-Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.16; historical benchmark JSON retains the release actually measured. Explore [example data](README.md#open-the-example-without-keys) with only Node, then start the [core lesson](README.md#run-the-first-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
+Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a Hugging Face token with the [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) terms accepted. The current Pixeltable lock resolves 0.7.16; historical benchmark JSON retains the release actually measured. Explore [example data](README.md#try-it) with only Node, then start the [core lesson](docs/WALKTHROUGH.md#execute-the-live-lesson): the same backend requests one summary enrichment in an isolated catalog, and optional enrichment fields remain null. `examples/extend_call.py` demonstrates selective recompute without model calls; declare persistent product fields in `TableModel` rather than leaving manual catalog changes behind.
 
 ```bash
 cp .env.example .env                                  # set HF_TOKEN

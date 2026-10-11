@@ -19,7 +19,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "compare" / "results"
-DOCS = [ROOT / "README.md", ROOT / "compare" / "WHY_PIXELTABLE.md", ROOT / "compare" / "METHODOLOGY.md"]
+DOCS = [
+    ROOT / "compare" / "RESULTS.md",
+    ROOT / "compare" / "WHY_PIXELTABLE.md",
+    ROOT / "compare" / "METHODOLOGY.md",
+]
 
 BACKENDS = ("reference", "pixeltable")
 LABEL = {"reference": "Reference (Celery + Postgres)", "pixeltable": "Pixeltable"}

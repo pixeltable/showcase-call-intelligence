@@ -32,18 +32,30 @@ The [narrow workspace](images/example-workspace-mobile.jpg) keeps the summary be
 
 ## Execute the live lesson
 
-Follow the [live setup](../README.md#run-the-first-lesson), including the Hugging Face gates and
-adequate local model memory. Then:
+Prerequisites for real local models: Python 3.11+ with [uv](https://docs.astral.sh/uv/), Node.js 20+, Docker, and a [Hugging Face token](https://huggingface.co/settings/tokens) with access to [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) and its gated [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) dependency. Give Docker enough memory for the local model alongside your other containers; the live check below failed with a shared 8 GB VM. For a first integration check without model downloads or provider tokens, use the [deterministic tests](#verify-the-backend-without-models).
 
 ```bash
-./scripts/run_pixeltable.sh
-# In another terminal:
-./scripts/run_pixeltable.sh seed
+cp .env.example .env                                  # set HF_TOKEN for real diarization
+uv sync --frozen
+(cd backends/pixeltable && uv sync --frozen)
+(cd frontend && npm ci)
+docker compose up -d ollama
+docker compose exec ollama ollama pull llama3.1        # about 5 GB
+./scripts/run_pixeltable.sh                           # keep this terminal open for the UI
 ```
 
-Open **http://localhost:5175**. This uses the same dashboard with the real **:8002** API and a
-separate `data/lesson/` catalog. The core profile executes ASR/diarization, one summary request,
-segment expansion, and embeddings. It leaves four optional assessments null. A completed call
+In another terminal, from the repository:
+
+```bash
+./scripts/run_pixeltable.sh seed                      # add one fixture; no resets or duplicate uploads
+```
+
+Open **http://localhost:5175**. The API is on **:8002**, with its own catalog and uploads under `data/lesson/`. This path starts one Pixeltable service, one UI, and Ollama. It needs no Reference backend, Celery, Redis, or separate Postgres container. Model packages and weights are still needed for ASR and embeddings.
+
+Press Ctrl-C in the UI terminal, then run `./scripts/run_pixeltable.sh stop` to stop the lesson service and daemon while preserving data. The shared Ollama container remains available to other applications. The launcher fixes the core profile in this dedicated catalog; the comparison launcher uses its separate full-profile catalog. Applying one profile to the other's existing tables is a schema change, not a presentation switch.
+
+The core profile executes ASR/diarization, one summary request, segment expansion, and
+embeddings. It leaves four optional assessments null. A completed call
 has stored transcript and summary; detail separately exposes the last insert's search diagnostics.
 
 Leave a comment on the first segment before the next step. Those comments live in Pixeltable.
@@ -163,3 +175,22 @@ receipt commit are never scheduled; inspect and remove them only while intake is
 Read [DEPLOYMENT.md](DEPLOYMENT.md) for local/public profiles, authentication, secrets, single-writer
 constraints, retention, and backup/restore responsibilities. No existing catalog migration, live
 model request, historical-result rewrite, or public deployment is part of this release.
+
+## Verify the backend without models
+
+
+```bash
+cd backends/pixeltable
+uv sync --frozen
+uv run --frozen --with pytest python -m pytest tests/test_intake.py tests/test_api_contract.py -q
+PXT_ENRICHMENT_PROFILE=core uv run --frozen --with pytest python -m pytest tests/test_api_contract.py -q -k 'core_profile or extension'
+```
+
+This test suite creates a temporary catalog and exercises the real tables, computed-column execution, audio/video handling, segment view, vector index, API validation, comments, deletion, and model failure reporting. Deterministic substitutes replace the ASR, LLM, and embedding providers. It needs no Docker, provider tokens, or downloaded model weights, and does not touch an existing catalog. A successful run verifies backend integration; a real provider run is still a separate check.
+
+## Troubleshooting
+- `curl -s localhost:8002/api/health` checks the lesson's dependencies. The optional comparison uses `localhost:8001/api/health` and `localhost:8000/api/health`. `degraded` usually means the Ollama model is missing: pull it with `docker compose exec ollama ollama pull llama3.1`, not a host `ollama pull`.
+- LLM calls failing with `500 Internal Server Error`: Ollama's model runner can be killed for memory. The October 9 live check failed twice while loading `llama3.1` in a shared 7.74 GiB Docker VM, including a summary-only retry with no prompt cache. Increase Docker memory (12 GB is a starting allocation, not a validated minimum) or deliberately select a smaller model. Restarting or stopping unrelated containers is not part of the lesson. After fixing the runtime, recompute only failed summary cells; inspect `num_excs` and the call's status rather than relying on the recompute command's exit code. See the [live validation record](../docs/validation/2026-10-09.json).
+- `pxt` says the configuration changed since the daemon started: `.env` changed. `run_compare.sh` restarts the daemon; by hand, `pxt daemon restart`.
+- After pulling schema changes, `./scripts/run_compare.sh seed` resets both stores.
+- `run_compare.sh` gives the pxt daemon its own port (`PXT_PORT`, default 22090), because `pxt` replaces a daemon that serves another project on its port.

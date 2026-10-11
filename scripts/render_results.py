@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "compare" / "results"
 DOCS = [
+    ROOT / "README.md",
     ROOT / "compare" / "RESULTS.md",
     ROOT / "compare" / "WHY_PIXELTABLE.md",
     ROOT / "compare" / "METHODOLOGY.md",
@@ -253,6 +254,11 @@ def tables(metrics: dict, bench: dict | None, evolve: dict | None) -> dict[str, 
         ("Orchestration hops", "orchestration_hops"),
     ]
     out = {
+        "readme-code": table(
+            ["Backend application", "Custom Reference", "Pixeltable"],
+            [[label, cell(m["reference"][key]), cell(m["pixeltable"][key])]
+             for label, key in (("Code lines", "app_loc"), ("Files", "app_files"))],
+        ),
         "code": table(
             ["Measured from source", "Reference", "Pixeltable"],
             [[label, cell(m["reference"][k]), cell(m["pixeltable"][k])] for label, k in rows]

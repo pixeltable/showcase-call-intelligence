@@ -4,7 +4,7 @@ This repo implements one call-intelligence product twice and measures the differ
 
 ## Rules that are easy to break
 
-1. **Never type a measured number into a doc.** Measurements come from `compare/results/*.json` and are written into [the results](compare/RESULTS.md), backend analysis, and methodology by `scripts/render_results.py` between `<!-- results:... -->` markers. CI fails when they drift. Keep the README focused on the demo and links to this evidence.
+1. **Never type a measured number into a doc.** Measurements come from `compare/results/*.json` and are written into the README comparison, [the results](compare/RESULTS.md), backend analysis, and methodology by `scripts/render_results.py` between `<!-- results:... -->` markers. CI fails when they drift. Keep the README focused on the comparison and walkthrough, with detailed measurements in the linked docs.
 2. **A metric with no pattern for a backend renders `n/a`, never `0`.** Pixeltable has no migration files because it has no migrations, not because it wrote zero of them.
 3. **One contract.** Both backends serve [`shared/call_center_api/schemas.py`](shared/call_center_api/schemas.py) to one React client. A change to the contract is a change to both backends, the client and the gates.
 4. **Hold each backend to its platform's own idioms.** Pixeltable is one `app.py` applied with `pxt schema update` and served with `pxt service update`, as its docs prescribe. If either side is more verbose than its platform requires, that is our bug, not its cost.
